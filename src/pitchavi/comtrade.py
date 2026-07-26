@@ -10,6 +10,21 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
+ISO_TO_COMTRADE: dict[str, str] = {
+    "US": "842",
+    "DE": "276",
+    "PE": "604",
+    "GB": "826",
+    "FR": "250",
+    "ES": "724",
+    "IT": "380",
+    "MX": "484",
+    "BR": "076",
+    "CN": "156",
+    "JP": "392",
+}
+
+
 class ComtradeRequestError(RuntimeError):
     def __init__(
         self,
@@ -49,14 +64,20 @@ class ComtradeConnector:
         limit: int,
         hs_code: str | None = None,
         reporter_country: str = "0",
-        partner_country: str = "0",
+        partner_country: str | None = None,
+        target_market: str | None = None,
         flow: str = "all",
     ) -> ComtradeResponse:
+        resolved_partner = partner_country
+        if resolved_partner is None and target_market:
+            resolved_partner = ISO_TO_COMTRADE.get(target_market.upper(), "0")
+        if resolved_partner is None:
+            resolved_partner = "0"
         params: dict[str, str] = {
             "subscription-key": "public",
             "filter": json.dumps({
                 "reporterCode": reporter_country,
-                "partnerCode": partner_country,
+                "partnerCode": resolved_partner,
                 "period": f"{from_publication_date[:4]}-2025",
                 "cmdCode": hs_code or "",
                 "flow": flow,

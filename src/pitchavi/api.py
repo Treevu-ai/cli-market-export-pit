@@ -8,30 +8,44 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Path as ApiPath, Request, status
+from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from .climatiq import ClimatiqConnector
 from .comtrade import ComtradeConnector
 from .cordis import CORDISConnector
 from .crossref import CrossrefConnector
+from .efsa_eurlex import EFSALexConnector
 from .epo_ops import EPOOPSConnector
+from .fooddata_central import FoodDataCentralConnector
 from .gdelt import GDELTConnector
 from .nih_reporter import NIHReporterConnector
 from .nsf_awards import NSFAwardsConnector
 from .openalex import OpenAlexConnector
 from .openfda import OpenFDAConnector
-from .efsa_eurlex import EFSALexConnector
-from .fooddata_central import FoodDataCentralConnector
-from .climatiq import ClimatiqConnector
 from .pubmed import PubMedConnector
 from .reports import ReportGenerator
-from .research import ResearchExecutionError, ResearchService, ScoringService
+from .research import ResearchExecutionError, ResearchService
+from .scoring import ScoringService
 from .semanticscholar import SemanticScholarConnector
 from .storage import ResearchStore
 
 logger = logging.getLogger("pitchavi")
+
+ENRICHMENT_HANDLERS: dict[str, str] = {
+    "crossref": "enrich_with_crossref",
+    "pubmed": "enrich_with_pubmed",
+    "semanticscholar": "enrich_with_semanticscholar",
+    "patent": "enrich_with_patent",
+    "trend": "enrich_with_trend",
+    "trade": "enrich_with_trade",
+    "regulatory": "enrich_with_regulatory",
+    "sustainability": "enrich_with_sustainability",
+    "techscout": "enrich_with_techscout",
+}
 
 
 class ResearchRunCreate(BaseModel):
@@ -42,15 +56,16 @@ class ResearchRunCreate(BaseModel):
     limit: Annotated[int, Field(ge=1, le=100)] = 25
 
 
-class CrossrefEnrichmentCreate(BaseModel):
-    limit: Annotated[int, Field(ge=1, le=100)] = 25
+class ResearchRunFullCreate(ResearchRunCreate):
+    hs_code: Annotated[str | None, Field(min_length=2, max_length=20)] = None
 
 
 class DomainEnrichmentCreate(BaseModel):
     limit: Annotated[int, Field(ge=1, le=100)] = 25
+    hs_code: Annotated[str | None, Field(min_length=2, max_length=20)] = None
 
 
-def _default_service() -> ResearchService:
+def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerator]:
     database_path = Path(os.getenv("PITCHAVI_DB_PATH", "data/pitchavi.db"))
     raw_directory = Path(os.getenv("PITCHAVI_RAW_DIR", "data/raw"))
     patent_connector = None
@@ -59,33 +74,25 @@ def _default_service() -> ResearchService:
             os.getenv("EPO_OPS_CONSUMER_KEY", ""),
             os.getenv("EPO_OPS_CONSUMER_SECRET", ""),
         )
-    trend_connector = GDELTConnector()
-    trade_connector = ComtradeConnector()
-    cordis_connector = CORDISConnector()
-    nih_connector = NIHReporterConnector()
-    nsf_connector = NSFAwardsConnector()
-    openfda_connector = OpenFDAConnector()
-    efsa_connector = EFSALexConnector()
-    fooddata_connector = FoodDataCentralConnector(api_key=os.getenv("FOODDATA_CENTRAL_API_KEY"))
-    climatiq_connector = ClimatiqConnector(api_key=os.getenv("CLIMATIQ_API_KEY"))
     store = ResearchStore(database_path, raw_directory)
-    return ResearchService(
+    service = ResearchService(
         store,
         OpenAlexConnector(),
         CrossrefConnector(os.getenv("PITCHAVI_CONTACT_EMAIL")),
         PubMedConnector(),
         SemanticScholarConnector(),
         patent_connector,
-        trend_connector,
-        trade_connector,
-        cordis_connector,
-        nih_connector,
-        nsf_connector,
-        openfda_connector,
-        efsa_connector,
-        fooddata_connector,
-        climatiq_connector,
-    ), ScoringService(store), ReportGenerator()
+        GDELTConnector(),
+        ComtradeConnector(),
+        CORDISConnector(),
+        NIHReporterConnector(),
+        NSFAwardsConnector(),
+        OpenFDAConnector(),
+        EFSALexConnector(),
+        FoodDataCentralConnector(api_key=os.getenv("FOODDATA_CENTRAL_API_KEY")),
+        ClimatiqConnector(api_key=os.getenv("CLIMATIQ_API_KEY")),
+    )
+    return service, ScoringService(store), ReportGenerator()
 
 
 _API_KEY = os.getenv("PITCHAVI_API_KEY")
@@ -164,10 +171,12 @@ class APIKeyMiddleware:
                 return
         start_time = time.perf_counter()
         status_code_holder = {"status_code": 200}
+
         async def send_wrapper(message: Any) -> None:
             if message["type"] == "http.response.start":
                 status_code_holder["status_code"] = message["status"]
             await send(message)
+
         await self.app(scope, receive, send_wrapper)
         duration = time.perf_counter() - start_time
         endpoint = scope["path"]
@@ -189,10 +198,22 @@ def _envelope(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def create_app(service: ResearchService | None = None, scoring_service: ScoringService | None = None, report_generator: ReportGenerator | None = None) -> FastAPI:
-    research_service = service or _default_service()[0]
-    scoring_svc = scoring_service or _default_service()[1]
-    report_gen = report_generator or _default_service()[2]
+def _handle_research_error(error: ResearchExecutionError) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail={"research_run_id": error.run_id, "message": error.message},
+    ) from error
+
+
+def create_app(
+    service: ResearchService | None = None,
+    scoring_service: ScoringService | None = None,
+    report_generator: ReportGenerator | None = None,
+) -> FastAPI:
+    default_service, default_scoring, default_report = _default_services()
+    research_service = service or default_service
+    scoring_svc = scoring_service or (ScoringService(research_service.store) if service else default_scoring)
+    report_gen = report_generator or default_report
     app = FastAPI(
         title="Pitchavi Research API",
         version="0.1.0",
@@ -210,11 +231,11 @@ def create_app(service: ResearchService | None = None, scoring_service: ScoringS
     _setup_logging()
 
     @app.get("/v1/health")
-    def health_check() -> dict:
+    def health_check() -> dict[str, str]:
         return {"status": "ok", "version": "0.1.0"}
 
     @app.post("/v1/research-runs", status_code=status.HTTP_201_CREATED)
-    def create_research_run(payload: ResearchRunCreate) -> dict:
+    def create_research_run(payload: ResearchRunCreate) -> dict[str, Any]:
         try:
             run = research_service.run_science_research(
                 query=payload.query,
@@ -225,10 +246,23 @@ def create_app(service: ResearchService | None = None, scoring_service: ScoringS
                 limit=payload.limit,
             )
         except ResearchExecutionError as error:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail={"research_run_id": error.run_id, "message": error.message},
-            ) from error
+            _handle_research_error(error)
+        return _envelope(run)
+
+    @app.post("/v1/research-runs/full", status_code=status.HTTP_201_CREATED)
+    def create_full_research_run(payload: ResearchRunFullCreate) -> dict[str, Any]:
+        try:
+            run = research_service.run_full_pipeline(
+                query=payload.query,
+                target_market=payload.target_market,
+                application=payload.application,
+                cutoff_at=datetime.now(timezone.utc).isoformat(),
+                from_publication_date=payload.from_publication_date,
+                limit=payload.limit,
+                hs_code=payload.hs_code,
+            )
+        except ResearchExecutionError as error:
+            _handle_research_error(error)
         return _envelope(run)
 
     @app.get("/v1/research-runs/{run_id}")
@@ -239,25 +273,36 @@ def create_app(service: ResearchService | None = None, scoring_service: ScoringS
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         return _envelope(run)
 
+    @app.post("/v1/research-runs/{run_id}/enrich/{domain}")
+    def enrich_research_run(run_id: str, domain: str, payload: DomainEnrichmentCreate) -> dict[str, Any]:
+        handler_name = ENRICHMENT_HANDLERS.get(domain)
+        if handler_name is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"unknown enrichment domain: {domain}")
+        try:
+            research_service.store.get_run(run_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+        handler = getattr(research_service, handler_name)
+        try:
+            if domain == "trade":
+                run = handler(run_id=run_id, limit=payload.limit, hs_code=payload.hs_code)
+            else:
+                run = handler(run_id=run_id, limit=payload.limit)
+        except RuntimeError as error:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error)) from error
+        except ResearchExecutionError as error:
+            _handle_research_error(error)
+        return _envelope(run)
+
     @app.get("/v1/research-runs/{run_id}/report")
     async def get_research_report(run_id: str) -> dict[str, Any]:
-        run = research_service.store.get_run(run_id)
-        if not run:
+        try:
+            research_service.store.get_run(run_id)
+        except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+        run = research_service.store.get_run_detail(run_id)
         scores = scoring_svc.calculate_scores(run_id)
-        weights = {"science": 0.30, "patent": 0.20, "trend": 0.20, "trade": 0.30}
-        domain_scores = []
-        for domain, payloads in research_service.store.get_domain_summaries(run_id).items():
-            payload = next(iter(payloads.values()), {}) if payloads else {}
-            score = scoring_svc._estimate_score(domain, payload)
-            confidence = "high" if scoring_svc._estimate_coverage(domain, payload) > 0.7 else "medium"
-            domain_scores.append({
-                "domain": domain,
-                "score": score,
-                "confidence": confidence,
-                "weight": weights.get(domain, 0.0),
-                "coverage": scoring_svc._estimate_coverage(domain, payload),
-            })
+        domain_scores = scoring_svc.build_domain_scores(run_id)
         report = report_gen.generate_json(run=run, scores=scores, domain_scores=domain_scores)
         return {
             "data": report,
@@ -265,23 +310,27 @@ def create_app(service: ResearchService | None = None, scoring_service: ScoringS
             "trace": {"version": "0.1.0", "timestamp": datetime.now(timezone.utc).isoformat()},
         }
 
+    @app.get("/v1/research-runs/{run_id}/report.pdf")
+    async def get_research_report_pdf(run_id: str) -> Response:
+        try:
+            research_service.store.get_run(run_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+        run = research_service.store.get_run_detail(run_id)
+        scores = scoring_svc.calculate_scores(run_id)
+        pdf_bytes = report_gen.generate_pdf(run=run, scores=scores)
+        return Response(content=pdf_bytes, media_type="application/pdf")
+
     @app.get("/v1/connectors/status")
     async def connectors_status() -> dict[str, Any]:
         stats_rows = research_service.store.get_connector_stats()
         freshness_rows = research_service.store.get_freshness()
         quota_rows = research_service.store.get_quota_usage()
-
         stats = {row["source"]: {"total_requests": row["total_requests"], "completed": row["completed"], "failed": row["failed"], "success_rate": row["success_rate"]} for row in stats_rows}
         freshness = {row["source"]: {"last_fetched": row["last_fetched"], "total": row["total"]} for row in freshness_rows}
         quota = {row["source"]: {"request_count": row["request_count"], "rate_limited": row["rate_limited"]} for row in quota_rows}
         metrics = {row["source"]: {"requests": row["total_requests"], "errors": row["failed"]} for row in stats_rows}
-
-        return {
-            "stats": stats,
-            "freshness": freshness,
-            "quota": quota,
-            "metrics": metrics,
-        }
+        return {"stats": stats, "freshness": freshness, "quota": quota, "metrics": metrics}
 
     @app.get("/metrics")
     async def metrics() -> dict[str, Any]:

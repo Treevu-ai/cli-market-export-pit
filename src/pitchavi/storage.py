@@ -80,7 +80,7 @@ class ResearchStore:
         with self._transaction() as db:
             if self._backend == "postgresql":
                 statements = [
-                    "CREATE TABLE IF NOT EXISTS research_runs (id TEXT PRIMARY KEY, query_original TEXT NOT NULL, query_normalized TEXT NOT NULL, taxonomy_version TEXT NOT NULL, target_market TEXT NOT NULL, application TEXT NOT NULL, cutoff_at TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, completed_at TEXT, error TEXT)",
+                    "CREATE TABLE IF NOT EXISTS research_runs (id TEXT PRIMARY KEY, query_original TEXT NOT NULL, query_normalized TEXT NOT NULL, taxonomy_version TEXT NOT NULL, target_market TEXT NOT NULL, application TEXT NOT NULL, from_publication_date TEXT NOT NULL DEFAULT '2021-01-01', cutoff_at TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, completed_at TEXT, error TEXT)",
                     "CREATE TABLE IF NOT EXISTS source_requests (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, source TEXT NOT NULL, request_url TEXT NOT NULL, request_params TEXT NOT NULL, fetched_at TEXT, http_status INTEGER, checksum TEXT, raw_object_key TEXT, license TEXT NOT NULL, status TEXT NOT NULL, error TEXT)",
                     "CREATE TABLE IF NOT EXISTS evidence_records (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, source_request_id TEXT NOT NULL REFERENCES source_requests(id) ON DELETE RESTRICT, source TEXT NOT NULL, domain TEXT NOT NULL, external_id TEXT NOT NULL, title TEXT NOT NULL, published_at TEXT, geography TEXT, normalized_payload TEXT NOT NULL, dedupe_key TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(research_run_id, source, dedupe_key))",
                     "CREATE TABLE IF NOT EXISTS evidence_source_links (id TEXT PRIMARY KEY, evidence_record_id TEXT NOT NULL REFERENCES evidence_records(id) ON DELETE CASCADE, source_request_id TEXT NOT NULL REFERENCES source_requests(id) ON DELETE RESTRICT, source TEXT NOT NULL, external_id TEXT NOT NULL, normalized_payload TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(source_request_id, external_id))",
@@ -98,6 +98,7 @@ class ResearchStore:
                 ]
                 for stmt in statements:
                     self._execute(db, stmt)
+                self._execute(db, "ALTER TABLE research_runs ADD COLUMN IF NOT EXISTS from_publication_date TEXT NOT NULL DEFAULT '2021-01-01'")
                 self._execute(db, "INSERT INTO evidence_source_links (id, evidence_record_id, source_request_id, source, external_id, normalized_payload, created_at) SELECT 'legacy_' || id, id, source_request_id, source, external_id, normalized_payload, created_at FROM evidence_records ON CONFLICT DO NOTHING")
             else:
                 db.executescript(
@@ -109,6 +110,7 @@ class ResearchStore:
                         taxonomy_version TEXT NOT NULL,
                         target_market TEXT NOT NULL,
                         application TEXT NOT NULL,
+                        from_publication_date TEXT NOT NULL DEFAULT '2021-01-01',
                         cutoff_at TEXT NOT NULL,
                         status TEXT NOT NULL,
                         created_at TEXT NOT NULL,
@@ -250,6 +252,10 @@ class ResearchStore:
                     );
                     """
                 )
+                try:
+                    db.execute("ALTER TABLE research_runs ADD COLUMN from_publication_date TEXT NOT NULL DEFAULT '2021-01-01'")
+                except sqlite3.OperationalError:
+                    pass
                 db.execute(
                     """
                     INSERT OR IGNORE INTO evidence_source_links (
@@ -271,17 +277,18 @@ class ResearchStore:
         target_market: str,
         application: str,
         cutoff_at: str,
+        from_publication_date: str = "2021-01-01",
         taxonomy_version: str = "cacao-functional-v1",
     ) -> dict[str, Any]:
         run_id = f"rr_{uuid.uuid4().hex}"
         created_at = _now()
         with self._transaction() as db:
-            self._execute(db, 
+            self._execute(db,
                 """
                 INSERT INTO research_runs (
                     id, query_original, query_normalized, taxonomy_version, target_market,
-                    application, cutoff_at, status, created_at
-                ) VALUES (_ph(), _ph(), _ph(), _ph(), _ph(), _ph(), _ph(), 'running', _ph())
+                    application, from_publication_date, cutoff_at, status, created_at
+                ) VALUES (_ph(), _ph(), _ph(), _ph(), _ph(), _ph(), _ph(), _ph(), 'running', _ph())
                 """,
                 (
                     run_id,
@@ -290,6 +297,7 @@ class ResearchStore:
                     taxonomy_version,
                     target_market,
                     application,
+                    from_publication_date,
                     cutoff_at,
                     created_at,
                 ),
@@ -605,14 +613,15 @@ class ResearchStore:
         return [dict(row) for row in rows]
 
     def save_domain_summary(self, *, research_run_id: str, domain: str, summary_type: str, payload: dict[str, Any]) -> None:
+        summary_id = f"dsm_{uuid.uuid4().hex}"
         with self._transaction() as db:
-            self._execute(db, 
+            self._execute(db,
                 """
-                INSERT INTO domain_summaries (research_run_id, domain, summary_type, payload, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO domain_summaries (id, research_run_id, domain, summary_type, payload, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(research_run_id, domain, summary_type) DO UPDATE SET payload=excluded.payload
                 """,
-                (research_run_id, domain, summary_type, json.dumps(payload, sort_keys=True), _now()),
+                (summary_id, research_run_id, domain, summary_type, json.dumps(payload, sort_keys=True), _now()),
             )
 
     def get_domain_summaries(self, research_run_id: str) -> dict[str, dict[str, Any]]:

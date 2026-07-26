@@ -21,7 +21,8 @@ from pitchavi.efsa_eurlex import EFSALexResponse
 from pitchavi.fooddata_central import FoodDataCentralResponse
 from pitchavi.climatiq import ClimatiqResponse
 from pitchavi.pubmed import PubMedResponse
-from pitchavi.research import ResearchExecutionError, ResearchService, ScoringService
+from pitchavi.research import ResearchExecutionError, ResearchService
+from pitchavi.scoring import ScoringService
 from pitchavi.reports import ReportGenerator
 from pitchavi.semanticscholar import SemanticScholarResponse
 from pitchavi.storage import ResearchStore
@@ -178,7 +179,7 @@ class SuccessfulTrendConnector:
     license_name = "GDELT Project; open for non-commercial use"
     base_url = "https://api.gdeltproject.org/api/v2/doc/doc"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> GDELTResponse:
+    def search(self, *, query: str, from_publication_date: str, limit: int, target_market: str | None = None) -> GDELTResponse:
         return GDELTResponse(
             request_url="https://api.gdeltproject.org/api/v2/doc/doc?query=cocoa",
             request_params={"query": query, "maxrecords": str(limit)},
@@ -210,7 +211,7 @@ class SuccessfulTradeConnector:
     license_name = "UN Comtrade; open data with attribution"
     base_url = "https://comtradeapi.un.org/getData"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int, hs_code: str | None = None) -> ComtradeResponse:
+    def search(self, *, query: str, from_publication_date: str, limit: int, hs_code: str | None = None, target_market: str | None = None) -> ComtradeResponse:
         return ComtradeResponse(
             request_url="https://comtradeapi.un.org/getData?query=cocoa",
             request_params={"query": query, "maxrecords": str(limit)},
@@ -859,6 +860,43 @@ class ResearchServiceTests(unittest.TestCase):
             summaries = enriched.get("summaries", {})
             self.assertIn("climatiq_aggregation", summaries)
             self.assertEqual(summaries["climatiq_aggregation"]["activity_count"], 1)
+
+
+    def test_full_pipeline_endpoint_runs_science_step(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, service = self._service(directory, SuccessfulConnector())
+            client = TestClient(create_app(service))
+            response = client.post(
+                "/v1/research-runs/full",
+                json={"query": "high-flavanol cocoa powder", "limit": 10},
+            )
+            self.assertEqual(response.status_code, 201)
+            body = response.json()
+            self.assertEqual(body["data"]["status"], "completed")
+            self.assertGreaterEqual(len(body["data"]["sources"]), 1)
+
+    def test_enrich_endpoint_crossref(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, service = self._service(
+                directory,
+                SuccessfulConnector(),
+                crossref_connector=SuccessfulCrossrefConnector(),
+            )
+            initial = service.run_science_research(
+                query="high-flavanol cocoa powder",
+                target_market="US",
+                application="functional foods and beverages",
+                cutoff_at="2026-07-24T00:00:00+00:00",
+                from_publication_date="2021-01-01",
+                limit=10,
+            )
+            client = TestClient(create_app(service))
+            response = client.post(
+                f"/v1/research-runs/{initial['id']}/enrich/crossref",
+                json={"limit": 10},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.json()["data"]["sources"]), 2)
 
 
 if __name__ == "__main__":

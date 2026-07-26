@@ -14,7 +14,6 @@ from .gdelt import GDELTConnector, GDELTRequestError
 from .comtrade import ComtradeConnector, ComtradeRequestError
 from .openalex import OpenAlexRequestError, OpenAlexResponse
 from .pubmed import PubMedConnector, PubMedRequestError
-from .scoring import ScoringEngine
 from .semanticscholar import SemanticScholarConnector, SemanticScholarRequestError
 from .storage import ResearchStore
 from .cordis import CORDISConnector, CORDISRequestError
@@ -42,6 +41,14 @@ class ResearchExecutionError(RuntimeError):
 
 def normalize_query(query: str) -> str:
     return " ".join(query.casefold().split())
+
+
+def _run_context(run: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        run["query_normalized"],
+        run.get("from_publication_date") or "2021-01-01",
+        run.get("target_market") or "US",
+    )
 
 
 def _dedupe_key(doi: str, fallback: str) -> str:
@@ -120,6 +127,7 @@ class ResearchService:
             target_market=target_market,
             application=application,
             cutoff_at=cutoff_at,
+            from_publication_date=from_publication_date,
         )
         run_id = run["id"]
         request_id: str | None = None
@@ -312,11 +320,12 @@ class ResearchService:
         if self.pubmed_connector is None:
             raise RuntimeError("PubMed connector is not configured")
         run = self.store.get_run(run_id)
+        query, from_date, _target_market = _run_context(run)
         request_id: str | None = None
         try:
             response = self.pubmed_connector.search(
-                query=run["query_normalized"],
-                from_publication_date="2021-01-01",
+                query=query,
+                from_publication_date=from_date,
                 limit=limit,
             )
             request_id = self.store.start_source_request(
@@ -355,11 +364,12 @@ class ResearchService:
         if self.semanticscholar_connector is None:
             raise RuntimeError("Semantic Scholar connector is not configured")
         run = self.store.get_run(run_id)
+        query, from_date, _target_market = _run_context(run)
         request_id: str | None = None
         try:
             response = self.semanticscholar_connector.search(
-                query=run["query_normalized"],
-                from_publication_date="2021-01-01",
+                query=query,
+                from_publication_date=from_date,
                 limit=limit,
             )
             request_id = self.store.start_source_request(
@@ -398,11 +408,12 @@ class ResearchService:
         if self.patent_connector is None:
             raise RuntimeError("Patent connector is not configured")
         run = self.store.get_run(run_id)
+        query, from_date, _target_market = _run_context(run)
         request_id: str | None = None
         try:
             response = self.patent_connector.search(
-                query=run["query_normalized"],
-                from_publication_date="2021-01-01",
+                query=query,
+                from_publication_date=from_date,
                 limit=limit,
             )
             request_id = self.store.start_source_request(
@@ -589,12 +600,14 @@ class ResearchService:
         if self.trend_connector is None:
             raise RuntimeError("Trend connector is not configured")
         run = self.store.get_run(run_id)
+        query, from_date, target_market = _run_context(run)
         request_id: str | None = None
         try:
             response = self.trend_connector.search(
-                query=run["query_normalized"],
-                from_publication_date="2021-01-01",
+                query=query,
+                from_publication_date=from_date,
                 limit=limit,
+                target_market=target_market,
             )
             request_id = self.store.start_source_request(
                 research_run_id=run_id,
@@ -635,13 +648,15 @@ class ResearchService:
         if self.trade_connector is None:
             raise RuntimeError("Trade connector is not configured")
         run = self.store.get_run(run_id)
+        query, from_date, target_market = _run_context(run)
         request_id: str | None = None
         try:
             response = self.trade_connector.search(
-                query=run["query_normalized"],
-                from_publication_date="2021-01-01",
+                query=query,
+                from_publication_date=from_date,
                 limit=limit,
                 hs_code=hs_code,
+                target_market=target_market,
             )
             request_id = self.store.start_source_request(
                 research_run_id=run_id,
@@ -815,88 +830,63 @@ class ResearchService:
             },
         )
 
-    def _estimate_coverage(self, domain: str, summary: dict[str, Any]) -> float:
-        if not summary:
-            return 0.0
-        if domain == "science":
-            return 0.9 if summary.get("openalex_aggregation") else 0.4
-        if domain == "patent":
-            return 0.9 if summary.get("epo_ops_aggregation") else 0.0
-        if domain == "trend":
-            return 0.8 if summary.get("gdelt_aggregation") else 0.0
-        if domain == "trade":
-            return 0.9 if summary.get("comtrade_aggregation") else 0.0
-        return 0.0
-
-    def _estimate_score(self, domain: str, summary: dict[str, Any]) -> int:
-        if not summary:
-            return 0
-        if domain == "science":
-            agg = summary.get("openalex_aggregation", {})
-            count = len(agg.get("top_topics", []))
-            return min(100, max(0, count * 10))
-        if domain == "patent":
-            agg = summary.get("epo_ops_aggregation", {})
-            count = agg.get("patents_count", 0)
-            return min(100, max(0, count * 5))
-        if domain == "trend":
-            agg = summary.get("gdelt_aggregation", {})
-            count = agg.get("news_volume", 0)
-            return min(100, max(0, count * 5))
-        if domain == "trade":
-            agg = summary.get("comtrade_aggregation", {})
-            count = agg.get("trade_records_count", 0)
-            return min(100, max(0, count * 20))
-        return 0
-
-    def _build_claims(self, run_id: str, domain_scores: list[dict[str, Any]], result: dict[str, Any]) -> list[dict[str, Any]]:
-        claims = []
-        for item in domain_scores:
-            domain = item["domain"]
-            score = item["score"]
-            claims.append({
-                "domain": domain,
-                "statement": f"{domain.capitalize()} score estimated from available evidence.",
-                "value": score,
-                "unit": "index",
-                "method": "heuristic_v1",
-                "period_from": None,
-                "period_to": None,
-                "geography": None,
-                "confidence": item["confidence"],
-                "limitations": "Automated estimation; human review recommended.",
-                "source_refs": [run_id],
-            })
-        claims.append({
-            "domain": "opportunity",
-            "statement": f"Opportunity score calculated with coverage factor {result['coverage_factor']:.2f}.",
-            "value": result["opportunity_score"],
-            "unit": "index",
-            "method": "weighted_sum_v1",
-            "period_from": None,
-            "period_to": None,
-            "geography": None,
-            "confidence": "medium",
-            "limitations": "Weights are initial hypothesis; calibration pending.",
-            "source_refs": [run_id],
-        })
-        return claims
+    def run_full_pipeline(
+        self,
+        *,
+        query: str,
+        target_market: str,
+        application: str,
+        cutoff_at: str,
+        from_publication_date: str,
+        limit: int,
+        hs_code: str | None = None,
+    ) -> dict[str, Any]:
+        run = self.run_science_research(
+            query=query,
+            target_market=target_market,
+            application=application,
+            cutoff_at=cutoff_at,
+            from_publication_date=from_publication_date,
+            limit=limit,
+        )
+        run_id = run["id"]
+        optional_steps = [
+            lambda: self.enrich_with_crossref(run_id=run_id, limit=limit),
+            lambda: self.enrich_with_pubmed(run_id=run_id, limit=limit),
+            lambda: self.enrich_with_semanticscholar(run_id=run_id, limit=limit),
+            lambda: self.enrich_with_patent(run_id=run_id, limit=limit),
+            lambda: self.enrich_with_trend(run_id=run_id, limit=limit),
+            lambda: self.enrich_with_trade(run_id=run_id, limit=limit, hs_code=hs_code),
+            lambda: self.enrich_with_regulatory(run_id=run_id, limit=limit),
+            lambda: self.enrich_with_sustainability(run_id=run_id, limit=limit),
+            lambda: self.enrich_with_techscout(run_id=run_id, limit=limit),
+        ]
+        for step in optional_steps:
+            try:
+                step()
+            except RuntimeError as error:
+                if "not configured" in str(error).lower():
+                    continue
+                raise
+        return self.store.get_run_detail(run_id)
 
     def enrich_with_regulatory(self, *, run_id: str, limit: int) -> dict[str, Any]:
         run = self.store.get_run(run_id)
+        query, from_date, _target_market = _run_context(run)
         connectors = [
             ("openfda", self.openfda_connector, OpenFDARequestError),
             ("efsa_eurlex", self.efsa_connector, EFSALexRequestError),
             ("fooddata_central", self.fooddata_connector, FoodDataCentralRequestError),
         ]
+        failures: list[str] = []
         for source, connector, error_cls in connectors:
             if connector is None:
                 continue
             request_id: str | None = None
             try:
                 response = connector.search(
-                    query=run["query_normalized"],
-                    from_publication_date="2021-01-01",
+                    query=query,
+                    from_publication_date=from_date,
                     limit=limit,
                 )
                 request_id = self.store.start_source_request(
@@ -930,6 +920,9 @@ class ResearchService:
                     error=str(error),
                     raw_content=error.raw_content,
                 )
+                failures.append(f"{connector.source}: {error}")
+        if failures:
+            raise ResearchExecutionError(run_id, "; ".join(failures))
         self._save_regulatory_summary(run_id=run_id)
         return self.store.get_run_detail(run_id)
 
@@ -985,11 +978,12 @@ class ResearchService:
         if self.climatiq_connector is None:
             raise RuntimeError("Climatiq connector is not configured")
         run = self.store.get_run(run_id)
+        query, from_date, _target_market = _run_context(run)
         request_id: str | None = None
         try:
             response = self.climatiq_connector.search(
-                query=run["query_normalized"],
-                from_publication_date="2021-01-01",
+                query=query,
+                from_publication_date=from_date,
                 limit=limit,
             )
             request_id = self.store.start_source_request(
@@ -1083,19 +1077,21 @@ class ResearchService:
 
     def enrich_with_techscout(self, *, run_id: str, limit: int) -> dict[str, Any]:
         run = self.store.get_run(run_id)
+        query, from_date, _target_market = _run_context(run)
         connectors = [
             ("cordis", self.cordis_connector, CORDISRequestError),
             ("nih_reporter", self.nih_connector, NIHReporterRequestError),
             ("nsf_awards", self.nsf_connector, NSFAwardsRequestError),
         ]
+        failures: list[str] = []
         for source, connector, error_cls in connectors:
             if connector is None:
                 continue
             request_id: str | None = None
             try:
                 response = connector.search(
-                    query=run["query_normalized"],
-                    from_publication_date="2021-01-01",
+                    query=query,
+                    from_publication_date=from_date,
                     limit=limit,
                 )
                 request_id = self.store.start_source_request(
@@ -1129,6 +1125,9 @@ class ResearchService:
                     error=str(error),
                     raw_content=error.raw_content,
                 )
+                failures.append(f"{connector.source}: {error}")
+        if failures:
+            raise ResearchExecutionError(run_id, "; ".join(failures))
         self._save_techscout_summary(run_id=run_id)
         return self.store.get_run_detail(run_id)
 
@@ -1181,116 +1180,3 @@ class ResearchService:
                 "total_projects": sum(s["project_count"] for s in sources),
             },
         )
-
-class ScoringService:
-    def __init__(self, store: ResearchStore) -> None:
-        self.store = store
-
-    def calculate_scores(self, run_id: str) -> dict[str, Any]:
-        run = self.store.get_run(run_id)
-        summaries = self.store.get_domain_summaries(run_id)
-        domain_scores = []
-        for domain, payloads in summaries.items():
-            payload = next(iter(payloads.values()), {}) if payloads else {}
-            score = self._estimate_score(domain, payload)
-            confidence = "high" if self._estimate_coverage(domain, payload) > 0.7 else "medium"
-            domain_scores.append({
-                "domain": domain,
-                "score": score,
-                "confidence": confidence,
-            })
-        coverage_factor = sum(item["confidence"] == "high" for item in domain_scores) / max(len(domain_scores), 1)
-        opportunity_score = int(sum(item["score"] for item in domain_scores) / max(len(domain_scores), 1) * coverage_factor)
-        result = {
-            "score_version": "v1",
-            "coverage_factor": coverage_factor,
-            "opportunity_score": opportunity_score,
-            "recommendation": "pursue" if opportunity_score >= 60 else "monitor",
-            "dimensions": ["science", "patent", "trend", "trade"],
-            "alerts": [],
-            "exclusions": [],
-        }
-        claims = self._build_claims(run_id, domain_scores, result)
-        for claim in claims:
-            self.store.save_claim(
-                research_run_id=run_id,
-                domain=claim["domain"],
-                statement=claim["statement"],
-                value=claim["value"],
-                unit=claim["unit"],
-                method=claim["method"],
-                period_from=claim["period_from"],
-                period_to=claim["period_to"],
-                geography=claim["geography"],
-                confidence=claim["confidence"],
-                limitations=claim["limitations"],
-                source_refs=claim["source_refs"],
-            )
-        return result
-
-    def _estimate_coverage(self, domain: str, summary: dict[str, Any]) -> float:
-        if not summary:
-            return 0.0
-        if domain == "science":
-            return 0.9 if summary.get("openalex_aggregation") else 0.4
-        if domain == "patent":
-            return 0.9 if summary.get("epo_ops_aggregation") else 0.0
-        if domain == "trend":
-            return 0.8 if summary.get("gdelt_aggregation") else 0.0
-        if domain == "trade":
-            return 0.9 if summary.get("comtrade_aggregation") else 0.0
-        return 0.0
-
-    def _estimate_score(self, domain: str, summary: dict[str, Any]) -> int:
-        if not summary:
-            return 0
-        if domain == "science":
-            agg = summary.get("openalex_aggregation", {})
-            count = len(agg.get("top_topics", []))
-            return min(100, max(0, count * 10))
-        if domain == "patent":
-            agg = summary.get("epo_ops_aggregation", {})
-            count = agg.get("patents_count", 0)
-            return min(100, max(0, count * 5))
-        if domain == "trend":
-            agg = summary.get("gdelt_aggregation", {})
-            count = agg.get("news_volume", 0)
-            return min(100, max(0, count * 5))
-        if domain == "trade":
-            agg = summary.get("comtrade_aggregation", {})
-            count = agg.get("trade_records_count", 0)
-            return min(100, max(0, count * 20))
-        return 0
-
-    def _build_claims(self, run_id: str, domain_scores: list[dict[str, Any]], result: dict[str, Any]) -> list[dict[str, Any]]:
-        claims = []
-        for item in domain_scores:
-            domain = item["domain"]
-            score = item["score"]
-            claims.append({
-                "domain": domain,
-                "statement": f"{domain.capitalize()} score estimated from available evidence.",
-                "value": score,
-                "unit": "index",
-                "method": "heuristic_v1",
-                "period_from": None,
-                "period_to": None,
-                "geography": None,
-                "confidence": item["confidence"],
-                "limitations": "Automated estimation; human review recommended.",
-                "source_refs": [run_id],
-            })
-        claims.append({
-            "domain": "opportunity",
-            "statement": f"Opportunity score calculated with coverage factor {result['coverage_factor']:.2f}.",
-            "value": result["opportunity_score"],
-            "unit": "index",
-            "method": "weighted_sum_v1",
-            "period_from": None,
-            "period_to": None,
-            "geography": None,
-            "confidence": "medium",
-            "limitations": "Weights are initial hypothesis; calibration pending.",
-            "source_refs": [run_id],
-        })
-        return claims

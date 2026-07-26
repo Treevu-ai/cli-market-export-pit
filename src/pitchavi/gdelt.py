@@ -41,9 +41,19 @@ class GDELTConnector:
     license_name = "GDELT Project; open for non-commercial use"
     base_url = "https://api.gdeltproject.org/api/v2/doc/doc"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> GDELTResponse:
+    def search(
+        self,
+        *,
+        query: str,
+        from_publication_date: str,
+        limit: int,
+        target_market: str | None = None,
+    ) -> GDELTResponse:
+        scoped_query = query
+        if target_market:
+            scoped_query = f"{query} sourcecountry:{target_market}"
         params: dict[str, str] = {
-            "query": query,
+            "query": scoped_query,
             "mode": "artlist",
             "format": "json",
             "maxrecords": str(limit),
