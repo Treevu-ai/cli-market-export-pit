@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-07-25T20:42:08.773812",
+  "sprint": "7 + 5",
+  "summary": "Implemented regulatory/sustainability/techscout connectors, fixed research.py class structure, added API endpoints, completed Sprint 5 Docker/CI hardening",
+  "tests": "20/20 OK",
+  "files_modified": [
+    "src/pitchavi/research.py",
+    "src/pitchavi/api.py",
+    "src/pitchavi/storage.py",
+    "src/pitchavi/openfda.py",
+    "src/pitchavi/efsa_eurlex.py",
+    "src/pitchavi/fooddata_central.py",
+    "src/pitchavi/climatiq.py",
+    "src/pitchavi/cordis.py",
+    "src/pitchavi/nih_reporter.py",
+    "src/pitchavi/nsf_awards.py",
+    "src/pitchavi/scoring.py",
+    "src/pitchavi/reports.py",
+    "src/pitchavi/__init__.py",
+    "tests/test_research.py",
+    "pyproject.toml",
+    "Dockerfile",
+    "docker-compose.yml",
+    ".dockerignore",
+    ".github/workflows/ci.yml"
+  ]
+}
