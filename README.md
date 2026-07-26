@@ -21,7 +21,9 @@ $env:PYTHONPATH = "src"
 python -m uvicorn pit.api:app --reload
 ```
 
-API: http://127.0.0.1:8000/docs
+- **Landing:** http://127.0.0.1:8000/
+- **Consola PIT:** http://127.0.0.1:8000/analyze.html
+- **API:** http://127.0.0.1:8000/docs
 
 Docker:
 
@@ -96,7 +98,9 @@ python scripts/demo_arandano.py
 
 ## Landing comercial
 
-Borrador estático en `landing/index.html` (hero + CTA según PRD).
+Frontend en `web/` (diseño wireframe v1.0): landing + consola de análisis conectada a la API PIT. El servidor FastAPI sirve los archivos estáticos en `/`.
+
+Borrador anterior en `landing/index.html`.
 
 ## Product Intelligence (agentes)
 

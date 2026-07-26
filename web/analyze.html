@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Consola PIT — CLI Market Export Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/main.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="container app-header-inner">
+        <a class="brand" href="/">CLI MARKET · PIT</a>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+          <span class="status-pill status-idle" id="status-pill">Listo</span>
+          <a class="btn btn-secondary" href="/docs" target="_blank" rel="noreferrer" style="padding:0.45rem 0.9rem;font-size:0.85rem;">API</a>
+        </div>
+      </div>
+    </header>
+
+    <div class="container app-layout">
+      <aside class="panel">
+        <h2>Nueva consulta</h2>
+        <form id="analyze-form">
+          <div style="margin-bottom:1rem;">
+            <label for="query">Producto / consulta</label>
+            <input id="query" name="query" required minlength="3" placeholder="organic blueberry" />
+          </div>
+          <div style="margin-bottom:1rem;">
+            <label for="target_market">Mercado (ISO)</label>
+            <select id="target_market" name="target_market">
+              <option value="US">US — Estados Unidos</option>
+              <option value="PE">PE — Perú</option>
+              <option value="MX">MX — México</option>
+              <option value="CL">CL — Chile</option>
+              <option value="CO">CO — Colombia</option>
+              <option value="EU">EU — Unión Europea</option>
+            </select>
+          </div>
+          <div style="margin-bottom:1rem;">
+            <label for="application">Aplicación</label>
+            <input id="application" name="application" value="functional foods and beverages" />
+          </div>
+          <div style="margin-bottom:1rem;">
+            <label for="limit">Límite por fuente</label>
+            <input id="limit" name="limit" type="number" min="1" max="100" value="10" />
+          </div>
+          <div style="margin-bottom:1rem;">
+            <label for="hs_code">HS code (opcional)</label>
+            <input id="hs_code" name="hs_code" placeholder="081040" />
+          </div>
+          <button class="btn btn-primary" type="submit" id="submit-btn" style="width:100%;">Ejecutar pipeline completo</button>
+        </form>
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin-top:1rem;">
+          Conecta a <code id="api-base" style="font-family:var(--font-mono);font-size:11px;"></code>
+        </p>
+      </aside>
+
+      <section class="panel" id="results-panel">
+        <div id="empty-state" class="empty-state">
+          <p><strong>Sin resultados aún.</strong></p>
+          <p>Ejecuta un pipeline completo para ver score, dominios y evidencia trazable.</p>
+        </div>
+
+        <div id="results-content" class="hidden">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+            <div>
+              <p class="eyebrow">Research run</p>
+              <h2 style="font-family:var(--font-display);margin:0.25rem 0 0;" id="run-title">—</h2>
+              <p style="color:var(--text-secondary);font-size:0.9rem;margin:0.35rem 0 0;" id="run-meta">—</p>
+            </div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <a class="btn btn-secondary" id="pdf-link" href="#" target="_blank" rel="noreferrer" style="font-size:0.85rem;padding:0.5rem 0.9rem;">Descargar PDF</a>
+              <button class="btn btn-secondary" id="json-toggle" type="button" style="font-size:0.85rem;padding:0.5rem 0.9rem;">Ver JSON</button>
+            </div>
+          </div>
+
+          <div class="score-hero">
+            <div class="score-ring" id="score-value">—</div>
+            <div>
+              <span class="status-pill status-done" id="recommendation-pill">—</span>
+              <p style="margin:0.5rem 0 0;color:var(--text-secondary);font-size:0.9rem;">
+                Cobertura: <strong id="coverage-value">—</strong> · Versión <span id="score-version">—</span>
+              </p>
+              <p style="margin:0.35rem 0 0;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);" id="run-id">—</p>
+            </div>
+          </div>
+
+          <h3 style="font-family:var(--font-display);font-size:1.1rem;">Dominios</h3>
+          <div class="dimension-list" id="dimension-list"></div>
+
+          <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-top:1.5rem;">Evidencia</h3>
+          <div class="evidence-grid" id="evidence-grid"></div>
+
+          <pre id="json-raw" class="hidden evidence-body" style="margin-top:1rem;max-height:320px;"></pre>
+        </div>
+
+        <div id="error-state" class="hidden" style="margin-top:1rem;padding:1rem;border-radius:var(--radius-sm);background:#fde8e8;color:var(--error);"></div>
+      </section>
+    </div>
+  </div>
+
+  <script type="module" src="/js/analyze.js"></script>
+</body>
+</html>

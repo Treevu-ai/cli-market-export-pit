@@ -12,6 +12,7 @@ from typing import Annotated, Any
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .climarket import CLIMarketConnector
@@ -35,6 +36,10 @@ from .semanticscholar import SemanticScholarConnector
 from .storage import ResearchStore
 
 logger = logging.getLogger("pit")
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+WEB_DIR = REPO_ROOT / "web"
+ASSETS_DIR = REPO_ROOT / "assets"
 
 ENRICHMENT_HANDLERS: dict[str, str] = {
     "crossref": "enrich_with_crossref",
@@ -338,6 +343,11 @@ def create_app(
     @app.get("/metrics")
     async def metrics() -> dict[str, Any]:
         return _metrics.to_dict()
+
+    if ASSETS_DIR.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+    if WEB_DIR.is_dir():
+        app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="frontend")
 
     return app
 
