@@ -21,6 +21,6 @@
 - `>= 70` → `Investigate`
 
 ## Next Steps
-- [ ] Run calibration cases through system
+- [x] Run calibration cases through system
 - [ ] Adjust weights based on analyst feedback
-- [ ] Document final weights in `scoring.py`
+- [x] Document final weights in `scoring.py`

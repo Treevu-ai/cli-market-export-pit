@@ -41,9 +41,24 @@ class OpenFDAConnector:
     license_name = "OpenFDA; public data"
     base_url = "https://api.fda.gov/food/enforcement.json"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> OpenFDAResponse:
+    def search(
+        self,
+        *,
+        query: str,
+        from_publication_date: str,
+        limit: int,
+        target_market: str | None = None,
+    ) -> OpenFDAResponse:
+        if target_market and target_market.upper() != "US":
+            return OpenFDAResponse(
+                request_url=self.base_url,
+                request_params={"search": query, "limit": str(limit), "target_market": target_market or ""},
+                http_status=200,
+                raw_content=b'{"results":[]}',
+                works=[],
+            )
         params: dict[str, str] = {
-            "search": query,
+            "search": f'{query} AND report_date:[{from_publication_date} TO 30001231]',
             "limit": str(limit),
         }
         request_url = f"{self.base_url}?{urlencode(params)}"

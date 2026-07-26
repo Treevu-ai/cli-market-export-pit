@@ -339,7 +339,7 @@ class SuccessfulOpenFDAConnector:
     license_name = "OpenFDA; public data"
     base_url = "https://api.fda.gov/food/enforcement.json"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> OpenFDAResponse:
+    def search(self, *, query: str, from_publication_date: str, limit: int, target_market: str | None = None) -> OpenFDAResponse:
         return OpenFDAResponse(
             request_url="https://api.fda.gov/food/enforcement.json?search=cocoa",
             request_params={"search": query, "limit": str(limit)},
@@ -363,7 +363,7 @@ class SuccessfulEFSALexConnector:
     license_name = "EUR-Lex; open data with attribution"
     base_url = "https://eur-lex.europa.eu/search.html"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> EFSALexResponse:
+    def search(self, *, query: str, from_publication_date: str, limit: int, target_market: str | None = None) -> EFSALexResponse:
         return EFSALexResponse(
             request_url="https://eur-lex.europa.eu/search.html?search_text=cocoa",
             request_params={"search_text": query, "limit": str(limit)},
@@ -386,7 +386,7 @@ class SuccessfulFoodDataCentralConnector:
     license_name = "FoodData Central; public domain"
     base_url = "https://api.nal.usda.gov/fdc/v1/search"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> FoodDataCentralResponse:
+    def search(self, *, query: str, from_publication_date: str, limit: int, target_market: str | None = None) -> FoodDataCentralResponse:
         return FoodDataCentralResponse(
             request_url="https://api.nal.usda.gov/fdc/v1/search?query=cocoa",
             request_params={"query": query, "pageSize": str(limit)},

@@ -44,7 +44,22 @@ class FoodDataCentralConnector:
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> FoodDataCentralResponse:
+    def search(
+        self,
+        *,
+        query: str,
+        from_publication_date: str,
+        limit: int,
+        target_market: str | None = None,
+    ) -> FoodDataCentralResponse:
+        if target_market and target_market.upper() != "US":
+            return FoodDataCentralResponse(
+                request_url=self.base_url,
+                request_params={"query": query, "pageSize": str(limit), "target_market": target_market or ""},
+                http_status=200,
+                raw_content=b'{"foods":[]}',
+                works=[],
+            )
         params: dict[str, str] = {
             "query": query,
             "pageSize": str(limit),

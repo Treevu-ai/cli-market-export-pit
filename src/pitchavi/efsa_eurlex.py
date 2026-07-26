@@ -36,12 +36,30 @@ class EFSALexResponse:
     works: list[dict[str, Any]]
 
 
+EU_TARGET_MARKETS = frozenset({"AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"})
+
+
 class EFSALexConnector:
     source = "efsa_eurlex"
     license_name = "EUR-Lex; open data with attribution"
     base_url = "https://eur-lex.europa.eu/search.html"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> EFSALexResponse:
+    def search(
+        self,
+        *,
+        query: str,
+        from_publication_date: str,
+        limit: int,
+        target_market: str | None = None,
+    ) -> EFSALexResponse:
+        if target_market and target_market.upper() not in EU_TARGET_MARKETS:
+            return EFSALexResponse(
+                request_url=self.base_url,
+                request_params={"search_text": query, "limit": str(limit), "target_market": target_market or ""},
+                http_status=200,
+                raw_content=b'{"results":[]}',
+                works=[],
+            )
         params: dict[str, str] = {
             "search_text": query,
             "from_date": from_publication_date,
@@ -49,6 +67,9 @@ class EFSALexConnector:
             "limit": str(limit),
             "format": "json",
         }
+        if target_market:
+            params["domain"] = "EUR-Lex"
+            params["scope"] = target_market.upper()
         request_url = f"{self.base_url}?{urlencode(params)}"
         request = Request(
             request_url,

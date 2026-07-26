@@ -23,6 +23,7 @@ from .openfda import OpenFDAConnector, OpenFDARequestError
 from .efsa_eurlex import EFSALexConnector, EFSALexRequestError
 from .fooddata_central import FoodDataCentralConnector, FoodDataCentralRequestError
 from .climatiq import ClimatiqConnector, ClimatiqRequestError
+from .taxonomy import ensure_default_taxonomy, expand_query_with_synonyms, resolve_hs_code
 
 
 class ScienceConnector(Protocol):
@@ -121,6 +122,7 @@ class ResearchService:
     ) -> dict[str, Any]:
         if self.science_connector is None:
             raise RuntimeError("Science connector is not configured")
+        ensure_default_taxonomy(self.store)
         run = self.store.create_run(
             query_original=query,
             query_normalized=normalize_query(query),
@@ -130,11 +132,16 @@ class ResearchService:
             from_publication_date=from_publication_date,
         )
         run_id = run["id"]
+        search_query = expand_query_with_synonyms(
+            self.store,
+            taxonomy_version=run["taxonomy_version"],
+            query_normalized=run["query_normalized"],
+        )
         request_id: str | None = None
 
         try:
             request_params = {
-                "search": run["query_normalized"],
+                "search": search_query,
                 "filter": f"from_publication_date:{from_publication_date}",
                 "per-page": str(limit),
             }
@@ -157,18 +164,16 @@ class ResearchService:
                     )
                 else:
                     response = self.science_connector.search(
-                        query=run["query_normalized"],
+                        query=search_query,
                         from_publication_date=from_publication_date,
                         limit=limit,
                     )
             else:
                 response = self.science_connector.search(
-                    query=run["query_normalized"],
+                    query=search_query,
                     from_publication_date=from_publication_date,
                     limit=limit,
-        )
-
-
+                )
             request_id = self.store.start_source_request(
                 research_run_id=run_id,
                 source=self.science_connector.source,
@@ -649,13 +654,18 @@ class ResearchService:
             raise RuntimeError("Trade connector is not configured")
         run = self.store.get_run(run_id)
         query, from_date, target_market = _run_context(run)
+        resolved_hs = hs_code or resolve_hs_code(
+            self.store,
+            taxonomy_version=run["taxonomy_version"],
+            query_normalized=query,
+        )
         request_id: str | None = None
         try:
             response = self.trade_connector.search(
                 query=query,
                 from_publication_date=from_date,
                 limit=limit,
-                hs_code=hs_code,
+                hs_code=resolved_hs,
                 target_market=target_market,
             )
             request_id = self.store.start_source_request(
@@ -872,7 +882,7 @@ class ResearchService:
 
     def enrich_with_regulatory(self, *, run_id: str, limit: int) -> dict[str, Any]:
         run = self.store.get_run(run_id)
-        query, from_date, _target_market = _run_context(run)
+        query, from_date, target_market = _run_context(run)
         connectors = [
             ("openfda", self.openfda_connector, OpenFDARequestError),
             ("efsa_eurlex", self.efsa_connector, EFSALexRequestError),
@@ -888,6 +898,7 @@ class ResearchService:
                     query=query,
                     from_publication_date=from_date,
                     limit=limit,
+                    target_market=target_market,
                 )
                 request_id = self.store.start_source_request(
                     research_run_id=run_id,
