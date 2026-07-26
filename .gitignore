@@ -5,3 +5,11 @@ data/
 borradores/
 .kilo/
 
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+secrets/
+*credentials*
+*apis pit*
+
