@@ -1,8 +1,8 @@
-# Pitchavi — CLI Market Export Intelligence
+# PIT CLI Market Export Intelligence
 
 Motor de **inteligencia exportadora con evidencia trazable** para CLI Market. Dado un producto y mercado objetivo, consulta fuentes públicas, guarda respuestas crudas inmutables (SHA-256), normaliza evidencia y produce scores + reporte para decidir si vale la pena exportar.
 
-**Pitchavi** es el motor interno; **CLI Market Export Intelligence** es el producto comercial (landing + ficha de oportunidad).
+**PIT** es el motor interno; **CLI Market Export Intelligence** es el producto comercial (landing + ficha de oportunidad).
 
 ## Arquitectura
 
