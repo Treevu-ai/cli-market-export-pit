@@ -979,24 +979,34 @@ class ResearchService:
         )
         run_id = run["id"]
         optional_steps = [
-            lambda: self.enrich_with_crossref(run_id=run_id, limit=limit),
-            lambda: self.enrich_with_pubmed(run_id=run_id, limit=limit),
-            lambda: self.enrich_with_semanticscholar(run_id=run_id, limit=limit),
-            lambda: self.enrich_with_patent(run_id=run_id, limit=limit),
-            lambda: self.enrich_with_trend(run_id=run_id, limit=limit),
-            lambda: self.enrich_with_trade(run_id=run_id, limit=limit, hs_code=hs_code),
-            lambda: self.enrich_with_commerce(run_id=run_id, limit=limit),
-            lambda: self.enrich_with_regulatory(run_id=run_id, limit=limit),
-            lambda: self.enrich_with_sustainability(run_id=run_id, limit=limit),
-            lambda: self.enrich_with_techscout(run_id=run_id, limit=limit),
+            ("crossref", lambda: self.enrich_with_crossref(run_id=run_id, limit=limit)),
+            ("pubmed", lambda: self.enrich_with_pubmed(run_id=run_id, limit=limit)),
+            ("semanticscholar", lambda: self.enrich_with_semanticscholar(run_id=run_id, limit=limit)),
+            ("patent", lambda: self.enrich_with_patent(run_id=run_id, limit=limit)),
+            ("trend", lambda: self.enrich_with_trend(run_id=run_id, limit=limit)),
+            ("trade", lambda: self.enrich_with_trade(run_id=run_id, limit=limit, hs_code=hs_code)),
+            ("commerce", lambda: self.enrich_with_commerce(run_id=run_id, limit=limit)),
+            ("regulatory", lambda: self.enrich_with_regulatory(run_id=run_id, limit=limit)),
+            ("sustainability", lambda: self.enrich_with_sustainability(run_id=run_id, limit=limit)),
+            ("techscout", lambda: self.enrich_with_techscout(run_id=run_id, limit=limit)),
         ]
-        for step in optional_steps:
+        pipeline_failures: list[str] = []
+        for step_name, step in optional_steps:
             try:
                 step()
+            except ResearchExecutionError as error:
+                pipeline_failures.append(f"{step_name}: {error}")
             except RuntimeError as error:
                 if "not configured" in str(error).lower():
                     continue
                 raise
+        if pipeline_failures:
+            self.store.save_domain_summary(
+                research_run_id=run_id,
+                domain="pipeline",
+                summary_type="pipeline_warnings",
+                payload={"failures": pipeline_failures},
+            )
         return self.store.get_run_detail(run_id)
 
     def enrich_with_regulatory(self, *, run_id: str, limit: int) -> dict[str, Any]:

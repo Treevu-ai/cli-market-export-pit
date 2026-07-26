@@ -99,6 +99,20 @@ function renderReport(report) {
   renderDimensions(score.dimensions || {});
   renderEvidence(report.evidence_summary || {});
 
+  const alerts = [
+    ...(score.alerts || []),
+    ...((report.evidence_summary?.pipeline_warnings?.failures) || []),
+  ];
+  const alertsBox = document.getElementById("alerts-box");
+  if (alertsBox) {
+    if (alerts.length) {
+      alertsBox.innerHTML = `<strong>Advertencias del pipeline</strong><ul>${alerts.map((item) => `<li>${item}</li>`).join("")}</ul>`;
+      alertsBox.classList.remove("hidden");
+    } else {
+      alertsBox.classList.add("hidden");
+    }
+  }
+
   if (jsonRaw) jsonRaw.textContent = JSON.stringify(report, null, 2);
 
   emptyState?.classList.add("hidden");
