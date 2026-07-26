@@ -21,10 +21,17 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.5",
 ]
+agents = [
+    "openai-agents",
+    "pydantic>=2.7",
+    "python-dotenv>=1.0",
+]
 
 [project.scripts]
 pit = "pit.api:main"
+pit-product-intelligence = "agents.product_intelligence.runner:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["pit*", "agents*"]
 

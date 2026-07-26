@@ -98,6 +98,27 @@ python scripts/demo_arandano.py
 
 Borrador estático en `landing/index.html` (hero + CTA según PRD).
 
+## Product Intelligence (agentes)
+
+Capa multiagente opcional que genera una **Ficha de Oportunidad** (`GO` / `CONDITIONAL GO` / `PIVOT` / `NO-GO`) sobre evidencia PIT.
+
+```powershell
+pip install -e ".[agents]"
+$env:PYTHONPATH = "src;."
+$env:OPENAI_API_KEY = "..."
+python -m agents.product_intelligence `
+  --product "Snack proteico de quinua" `
+  --market "Perú" `
+  --segment "jóvenes profesionales" `
+  --use-pit `
+  --target-market PE `
+  --output dossier.md
+```
+
+Documentación completa: `agents/product_intelligence/README.md` · Spec: `agents/product_intelligence/SPEC.md`
+
+Los zips históricos v1/v2 están en `assets/archives/`.
+
 ## Repo
 
 https://github.com/Treevu-ai/cli-market-export-pit
