@@ -1,4 +1,4 @@
-"""Semantic Scholar connector for paper search."""
+"""GDELT connector for trend/news signals."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-class SemanticScholarRequestError(RuntimeError):
+class GDELTRequestError(RuntimeError):
     def __init__(
         self,
         message: str,
@@ -28,7 +28,7 @@ class SemanticScholarRequestError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class SemanticScholarResponse:
+class GDELTResponse:
     request_url: str
     request_params: dict[str, Any]
     http_status: int
@@ -36,23 +36,34 @@ class SemanticScholarResponse:
     works: list[dict[str, Any]]
 
 
-class SemanticScholarConnector:
-    source = "semanticscholar"
-    license_name = "Semantic Scholar Open Data; attribution required"
-    base_url = "https://api.semanticscholar.org/graph/v1/paper/search"
+class GDELTConnector:
+    source = "gdelt"
+    license_name = "GDELT Project; open for non-commercial use"
+    base_url = "https://api.gdeltproject.org/api/v2/doc/doc"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> SemanticScholarResponse:
+    def search(
+        self,
+        *,
+        query: str,
+        from_publication_date: str,
+        limit: int,
+        target_market: str | None = None,
+    ) -> GDELTResponse:
+        scoped_query = query
+        if target_market:
+            scoped_query = f"{query} sourcecountry:{target_market}"
         params: dict[str, str] = {
-            "query": query,
-            "fields": "title,year,authors,publicationDate,externalIds,citationCount",
-            "limit": str(limit),
+            "query": scoped_query,
+            "mode": "artlist",
+            "format": "json",
+            "maxrecords": str(limit),
+            "start": from_publication_date.replace("-", ""),
+            "end": "30000101",
         }
-        if from_publication_date:
-            params["year"] = f"{from_publication_date[:4]}-3000"
         request_url = f"{self.base_url}?{urlencode(params)}"
         request = Request(
             request_url,
-            headers={"User-Agent": "Pitchavi/0.1 research-service"},
+            headers={"User-Agent": "PIT/0.1 research-service"},
         )
         try:
             with urlopen(request, timeout=20) as response:
@@ -60,26 +71,26 @@ class SemanticScholarConnector:
                 http_status = response.status
         except HTTPError as error:
             raw_content = error.read()
-            raise SemanticScholarRequestError(
-                f"Semantic Scholar returned HTTP {error.code}",
+            raise GDELTRequestError(
+                f"GDELT returned HTTP {error.code}",
                 http_status=error.code,
                 raw_content=raw_content,
                 request_url=request_url,
                 request_params=params,
             ) from error
         except URLError as error:
-            raise SemanticScholarRequestError(
-                f"Semantic Scholar network error: {error.reason}",
+            raise GDELTRequestError(
+                f"GDELT network error: {error.reason}",
                 request_url=request_url,
                 request_params=params,
             ) from error
 
         try:
             body = json.loads(raw_content)
-            data_items = body.get("data", [])
+            articles = body.get("articles", [])
         except (json.JSONDecodeError, AttributeError, TypeError) as error:
-            raise SemanticScholarRequestError(
-                "Semantic Scholar response did not contain data",
+            raise GDELTRequestError(
+                "GDELT response did not contain articles",
                 http_status=http_status,
                 raw_content=raw_content,
                 request_url=request_url,
@@ -87,29 +98,28 @@ class SemanticScholarConnector:
             ) from error
 
         works: list[dict[str, Any]] = []
-        for item in data_items:
-            title = item.get("title")
+        seen_urls: set[str] = set()
+        for article in articles:
+            url = article.get("url", "")
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            title = article.get("title", "")
             if not title:
                 continue
-            pub_date = item.get("publicationDate") or (f"{item.get('year')}-01-01" if item.get("year") else None)
-            external_ids = item.get("externalIds") or {}
-            doi = external_ids.get("DOI")
-            authors = []
-            for author in item.get("authors", []) or []:
-                name = author.get("name")
-                if name:
-                    authors.append({"name": name})
+            pub_date = article.get("date")
+            if pub_date:
+                pub_date = str(pub_date)[:10]
             works.append({
-                "paper_id": str(item.get("paperId") or ""),
+                "url": url,
                 "title": title,
                 "publication_date": pub_date,
-                "doi": doi,
-                "source": "semanticscholar",
-                "authors": authors,
-                "citation_count": item.get("citationCount"),
+                "source": "gdelt",
+                "language": article.get("language"),
+                "domain": article.get("domain"),
             })
 
-        return SemanticScholarResponse(
+        return GDELTResponse(
             request_url=request_url,
             request_params=params,
             http_status=http_status,

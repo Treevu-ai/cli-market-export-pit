@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from pitchavi.scoring import ScoringEngine
+from pit.scoring import ScoringEngine
 
 
 class ScoringCalibrationTests(unittest.TestCase):
@@ -27,6 +27,7 @@ class ScoringCalibrationTests(unittest.TestCase):
             ("patent", 80, 0.9),
             ("trend", 70, 0.8),
             ("trade", 80, 0.9),
+            ("commerce", 75, 0.85),
         ])
         self.assertEqual(result["recommendation"], "Investigate")
         self.assertGreaterEqual(result["opportunity_score"], 70)

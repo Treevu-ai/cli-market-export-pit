@@ -1,4 +1,4 @@
-"""GDELT connector for trend/news signals."""
+"""OpenFDA connector for regulatory discovery."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-class GDELTRequestError(RuntimeError):
+class OpenFDARequestError(RuntimeError):
     def __init__(
         self,
         message: str,
@@ -28,7 +28,7 @@ class GDELTRequestError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class GDELTResponse:
+class OpenFDAResponse:
     request_url: str
     request_params: dict[str, Any]
     http_status: int
@@ -36,10 +36,10 @@ class GDELTResponse:
     works: list[dict[str, Any]]
 
 
-class GDELTConnector:
-    source = "gdelt"
-    license_name = "GDELT Project; open for non-commercial use"
-    base_url = "https://api.gdeltproject.org/api/v2/doc/doc"
+class OpenFDAConnector:
+    source = "openfda"
+    license_name = "OpenFDA; public data"
+    base_url = "https://api.fda.gov/food/enforcement.json"
 
     def search(
         self,
@@ -48,22 +48,23 @@ class GDELTConnector:
         from_publication_date: str,
         limit: int,
         target_market: str | None = None,
-    ) -> GDELTResponse:
-        scoped_query = query
-        if target_market:
-            scoped_query = f"{query} sourcecountry:{target_market}"
+    ) -> OpenFDAResponse:
+        if target_market and target_market.upper() != "US":
+            return OpenFDAResponse(
+                request_url=self.base_url,
+                request_params={"search": query, "limit": str(limit), "target_market": target_market or ""},
+                http_status=200,
+                raw_content=b'{"results":[]}',
+                works=[],
+            )
         params: dict[str, str] = {
-            "query": scoped_query,
-            "mode": "artlist",
-            "format": "json",
-            "maxrecords": str(limit),
-            "start": from_publication_date.replace("-", ""),
-            "end": "30000101",
+            "search": f'{query} AND report_date:[{from_publication_date} TO 30001231]',
+            "limit": str(limit),
         }
         request_url = f"{self.base_url}?{urlencode(params)}"
         request = Request(
             request_url,
-            headers={"User-Agent": "Pitchavi/0.1 research-service"},
+            headers={"User-Agent": "PIT/0.1 research-service"},
         )
         try:
             with urlopen(request, timeout=20) as response:
@@ -71,26 +72,26 @@ class GDELTConnector:
                 http_status = response.status
         except HTTPError as error:
             raw_content = error.read()
-            raise GDELTRequestError(
-                f"GDELT returned HTTP {error.code}",
+            raise OpenFDARequestError(
+                f"OpenFDA returned HTTP {error.code}",
                 http_status=error.code,
                 raw_content=raw_content,
                 request_url=request_url,
                 request_params=params,
             ) from error
         except URLError as error:
-            raise GDELTRequestError(
-                f"GDELT network error: {error.reason}",
+            raise OpenFDARequestError(
+                f"OpenFDA network error: {error.reason}",
                 request_url=request_url,
                 request_params=params,
             ) from error
 
         try:
             body = json.loads(raw_content)
-            articles = body.get("articles", [])
+            results = body.get("results", [])
         except (json.JSONDecodeError, AttributeError, TypeError) as error:
-            raise GDELTRequestError(
-                "GDELT response did not contain articles",
+            raise OpenFDARequestError(
+                "OpenFDA response did not contain results",
                 http_status=http_status,
                 raw_content=raw_content,
                 request_url=request_url,
@@ -98,28 +99,17 @@ class GDELTConnector:
             ) from error
 
         works: list[dict[str, Any]] = []
-        seen_urls: set[str] = set()
-        for article in articles:
-            url = article.get("url", "")
-            if not url or url in seen_urls:
-                continue
-            seen_urls.add(url)
-            title = article.get("title", "")
-            if not title:
-                continue
-            pub_date = article.get("date")
-            if pub_date:
-                pub_date = str(pub_date)[:10]
+        for item in results:
             works.append({
-                "url": url,
-                "title": title,
-                "publication_date": pub_date,
-                "source": "gdelt",
-                "language": article.get("language"),
-                "domain": article.get("domain"),
+                "recall_number": item.get("recall_number"),
+                "status": item.get("status"),
+                "classification": item.get("classification"),
+                "product_description": item.get("product_description"),
+                "reason_for_recall": item.get("reason_for_recall"),
+                "source": "openfda",
             })
 
-        return GDELTResponse(
+        return OpenFDAResponse(
             request_url=request_url,
             request_params=params,
             http_status=http_status,

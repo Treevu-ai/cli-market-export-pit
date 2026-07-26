@@ -1,4 +1,4 @@
-"""CORDIS connector for EU funded projects."""
+"""Semantic Scholar connector for paper search."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-class CORDISRequestError(RuntimeError):
+class SemanticScholarRequestError(RuntimeError):
     def __init__(
         self,
         message: str,
@@ -28,7 +28,7 @@ class CORDISRequestError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class CORDISResponse:
+class SemanticScholarResponse:
     request_url: str
     request_params: dict[str, Any]
     http_status: int
@@ -36,23 +36,23 @@ class CORDISResponse:
     works: list[dict[str, Any]]
 
 
-class CORDISConnector:
-    source = "cordis"
-    license_name = "CORDIS Open Data; attribution required"
-    base_url = "https://cordis.europa.eu/api/search"
+class SemanticScholarConnector:
+    source = "semanticscholar"
+    license_name = "Semantic Scholar Open Data; attribution required"
+    base_url = "https://api.semanticscholar.org/graph/v1/paper/search"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> CORDISResponse:
+    def search(self, *, query: str, from_publication_date: str, limit: int) -> SemanticScholarResponse:
         params: dict[str, str] = {
             "query": query,
-            "startDate": from_publication_date,
-            "endDate": "3000-01-01",
-            "pageSize": str(limit),
-            "format": "json",
+            "fields": "title,year,authors,publicationDate,externalIds,citationCount",
+            "limit": str(limit),
         }
+        if from_publication_date:
+            params["year"] = f"{from_publication_date[:4]}-3000"
         request_url = f"{self.base_url}?{urlencode(params)}"
         request = Request(
             request_url,
-            headers={"User-Agent": "Pitchavi/0.1 research-service"},
+            headers={"User-Agent": "PIT/0.1 research-service"},
         )
         try:
             with urlopen(request, timeout=20) as response:
@@ -60,28 +60,26 @@ class CORDISConnector:
                 http_status = response.status
         except HTTPError as error:
             raw_content = error.read()
-            raise CORDISRequestError(
-                f"CORDIS returned HTTP {error.code}",
+            raise SemanticScholarRequestError(
+                f"Semantic Scholar returned HTTP {error.code}",
                 http_status=error.code,
                 raw_content=raw_content,
                 request_url=request_url,
                 request_params=params,
             ) from error
         except URLError as error:
-            raise CORDISRequestError(
-                f"CORDIS network error: {error.reason}",
+            raise SemanticScholarRequestError(
+                f"Semantic Scholar network error: {error.reason}",
                 request_url=request_url,
                 request_params=params,
             ) from error
 
         try:
             body = json.loads(raw_content)
-            projects = body.get("projects", {}).get("project", [])
-            if isinstance(projects, dict):
-                projects = [projects]
+            data_items = body.get("data", [])
         except (json.JSONDecodeError, AttributeError, TypeError) as error:
-            raise CORDISRequestError(
-                "CORDIS response did not contain projects",
+            raise SemanticScholarRequestError(
+                "Semantic Scholar response did not contain data",
                 http_status=http_status,
                 raw_content=raw_content,
                 request_url=request_url,
@@ -89,22 +87,29 @@ class CORDISConnector:
             ) from error
 
         works: list[dict[str, Any]] = []
-        for project in projects:
-            title = project.get("title")
+        for item in data_items:
+            title = item.get("title")
             if not title:
                 continue
+            pub_date = item.get("publicationDate") or (f"{item.get('year')}-01-01" if item.get("year") else None)
+            external_ids = item.get("externalIds") or {}
+            doi = external_ids.get("DOI")
+            authors = []
+            for author in item.get("authors", []) or []:
+                name = author.get("name")
+                if name:
+                    authors.append({"name": name})
             works.append({
-                "project_id": project.get("id"),
+                "paper_id": str(item.get("paperId") or ""),
                 "title": title,
-                "start_date": project.get("startDate"),
-                "end_date": project.get("endDate"),
-                "funding_amount": project.get("fundingAmount"),
-                "currency": project.get("currency"),
-                "organizations": project.get("organizations", {}).get("organization", []),
-                "source": "cordis",
+                "publication_date": pub_date,
+                "doi": doi,
+                "source": "semanticscholar",
+                "authors": authors,
+                "citation_count": item.get("citationCount"),
             })
 
-        return CORDISResponse(
+        return SemanticScholarResponse(
             request_url=request_url,
             request_params=params,
             http_status=http_status,

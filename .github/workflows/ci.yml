@@ -43,6 +43,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build Docker image
-        run: docker build -t pitchavi:test .
+        run: docker build -t pit:test .
       - name: Test Docker Compose
         run: docker compose config

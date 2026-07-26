@@ -1,4 +1,4 @@
-"""FastAPI entry point for Pitchavi research runs."""
+"""FastAPI entry point for PIT research runs."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from .climarket import CLIMarketConnector
 from .climatiq import ClimatiqConnector
 from .comtrade import ComtradeConnector
 from .cordis import CORDISConnector
@@ -33,7 +34,7 @@ from .scoring import ScoringService
 from .semanticscholar import SemanticScholarConnector
 from .storage import ResearchStore
 
-logger = logging.getLogger("pitchavi")
+logger = logging.getLogger("pit")
 
 ENRICHMENT_HANDLERS: dict[str, str] = {
     "crossref": "enrich_with_crossref",
@@ -45,6 +46,7 @@ ENRICHMENT_HANDLERS: dict[str, str] = {
     "regulatory": "enrich_with_regulatory",
     "sustainability": "enrich_with_sustainability",
     "techscout": "enrich_with_techscout",
+    "commerce": "enrich_with_commerce",
 }
 
 
@@ -66,8 +68,8 @@ class DomainEnrichmentCreate(BaseModel):
 
 
 def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerator]:
-    database_path = Path(os.getenv("PITCHAVI_DB_PATH", "data/pitchavi.db"))
-    raw_directory = Path(os.getenv("PITCHAVI_RAW_DIR", "data/raw"))
+    database_path = Path(os.getenv("PIT_DB_PATH", "data/pit.db"))
+    raw_directory = Path(os.getenv("PIT_RAW_DIR", "data/raw"))
     patent_connector = None
     if os.getenv("EPO_OPS_CONSUMER_KEY") and os.getenv("EPO_OPS_CONSUMER_SECRET"):
         patent_connector = EPOOPSConnector(
@@ -78,7 +80,7 @@ def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerato
     service = ResearchService(
         store,
         OpenAlexConnector(),
-        CrossrefConnector(os.getenv("PITCHAVI_CONTACT_EMAIL")),
+        CrossrefConnector(os.getenv("PIT_CONTACT_EMAIL")),
         PubMedConnector(),
         SemanticScholarConnector(),
         patent_connector,
@@ -91,12 +93,13 @@ def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerato
         EFSALexConnector(),
         FoodDataCentralConnector(api_key=os.getenv("FOODDATA_CENTRAL_API_KEY")),
         ClimatiqConnector(api_key=os.getenv("CLIMATIQ_API_KEY")),
+        CLIMarketConnector(),
     )
     return service, ScoringService(store), ReportGenerator()
 
 
-_API_KEY = os.getenv("PITCHAVI_API_KEY")
-_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("PITCHAVI_CORS_ORIGINS", "").split(",") if origin.strip()]
+_API_KEY = os.getenv("PIT_API_KEY")
+_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("PIT_CORS_ORIGINS", "").split(",") if origin.strip()]
 
 
 class JSONFormatter(logging.Formatter):
@@ -160,7 +163,7 @@ class APIKeyMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        api_key = os.getenv("PITCHAVI_API_KEY")
+        api_key = os.getenv("PIT_API_KEY")
         if api_key:
             headers = {key.decode().lower(): value.decode() for key, value in scope.get("headers", [])}
             request_api_key = headers.get("x-api-key")
@@ -215,7 +218,7 @@ def create_app(
     scoring_svc = scoring_service or (ScoringService(research_service.store) if service else default_scoring)
     report_gen = report_generator or default_report
     app = FastAPI(
-        title="Pitchavi Research API",
+        title="PIT Research API",
         version="0.1.0",
         description="Traceable technology-intelligence research runs.",
     )
@@ -345,4 +348,4 @@ app = create_app()
 def main() -> None:
     import uvicorn
 
-    uvicorn.run("pitchavi.api:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("pit.api:app", host="127.0.0.1", port=8000, reload=False)

@@ -1,4 +1,4 @@
-"""OpenFDA connector for regulatory discovery."""
+"""Climatiq / Agribalyse connector for carbon footprint."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-class OpenFDARequestError(RuntimeError):
+class ClimatiqRequestError(RuntimeError):
     def __init__(
         self,
         message: str,
@@ -28,7 +28,7 @@ class OpenFDARequestError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class OpenFDAResponse:
+class ClimatiqResponse:
     request_url: str
     request_params: dict[str, Any]
     http_status: int
@@ -36,35 +36,26 @@ class OpenFDAResponse:
     works: list[dict[str, Any]]
 
 
-class OpenFDAConnector:
-    source = "openfda"
-    license_name = "OpenFDA; public data"
-    base_url = "https://api.fda.gov/food/enforcement.json"
+class ClimatiqConnector:
+    source = "climatiq"
+    license_name = "Climatiq; commercial with attribution"
+    base_url = "https://api.climatiq.io/v2/search"
 
-    def search(
-        self,
-        *,
-        query: str,
-        from_publication_date: str,
-        limit: int,
-        target_market: str | None = None,
-    ) -> OpenFDAResponse:
-        if target_market and target_market.upper() != "US":
-            return OpenFDAResponse(
-                request_url=self.base_url,
-                request_params={"search": query, "limit": str(limit), "target_market": target_market or ""},
-                http_status=200,
-                raw_content=b'{"results":[]}',
-                works=[],
-            )
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key
+
+    def search(self, *, query: str, from_publication_date: str, limit: int) -> ClimatiqResponse:
         params: dict[str, str] = {
-            "search": f'{query} AND report_date:[{from_publication_date} TO 30001231]',
+            "query": query,
             "limit": str(limit),
         }
         request_url = f"{self.base_url}?{urlencode(params)}"
+        headers = {"User-Agent": "PIT/0.1 research-service"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
         request = Request(
             request_url,
-            headers={"User-Agent": "Pitchavi/0.1 research-service"},
+            headers=headers,
         )
         try:
             with urlopen(request, timeout=20) as response:
@@ -72,26 +63,26 @@ class OpenFDAConnector:
                 http_status = response.status
         except HTTPError as error:
             raw_content = error.read()
-            raise OpenFDARequestError(
-                f"OpenFDA returned HTTP {error.code}",
+            raise ClimatiqRequestError(
+                f"Climatiq returned HTTP {error.code}",
                 http_status=error.code,
                 raw_content=raw_content,
                 request_url=request_url,
                 request_params=params,
             ) from error
         except URLError as error:
-            raise OpenFDARequestError(
-                f"OpenFDA network error: {error.reason}",
+            raise ClimatiqRequestError(
+                f"Climatiq network error: {error.reason}",
                 request_url=request_url,
                 request_params=params,
             ) from error
 
         try:
             body = json.loads(raw_content)
-            results = body.get("results", [])
+            results = body.get("data", [])
         except (json.JSONDecodeError, AttributeError, TypeError) as error:
-            raise OpenFDARequestError(
-                "OpenFDA response did not contain results",
+            raise ClimatiqRequestError(
+                "Climatiq response did not contain data",
                 http_status=http_status,
                 raw_content=raw_content,
                 request_url=request_url,
@@ -101,15 +92,15 @@ class OpenFDAConnector:
         works: list[dict[str, Any]] = []
         for item in results:
             works.append({
-                "recall_number": item.get("recall_number"),
-                "status": item.get("status"),
-                "classification": item.get("classification"),
-                "product_description": item.get("product_description"),
-                "reason_for_recall": item.get("reason_for_recall"),
-                "source": "openfda",
+                "activity_id": item.get("id"),
+                "name": item.get("name"),
+                "category": item.get("category"),
+                "unit": item.get("unit"),
+                "co2e_factor": item.get("co2e_factor"),
+                "source": "climatiq",
             })
 
-        return OpenFDAResponse(
+        return ClimatiqResponse(
             request_url=request_url,
             request_params=params,
             http_status=http_status,

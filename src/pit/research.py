@@ -23,6 +23,7 @@ from .openfda import OpenFDAConnector, OpenFDARequestError
 from .efsa_eurlex import EFSALexConnector, EFSALexRequestError
 from .fooddata_central import FoodDataCentralConnector, FoodDataCentralRequestError
 from .climatiq import ClimatiqConnector, ClimatiqRequestError
+from .climarket import CLIMarketConnector, CLIMarketRequestError
 from .taxonomy import ensure_default_taxonomy, expand_query_with_synonyms, resolve_hs_code
 
 
@@ -93,6 +94,7 @@ class ResearchService:
         efsa_connector: EFSALexConnector | None = None,
         fooddata_connector: FoodDataCentralConnector | None = None,
         climatiq_connector: ClimatiqConnector | None = None,
+        commerce_connector: CLIMarketConnector | None = None,
     ) -> None:
         self.store = store
         self.science_connector = science_connector
@@ -109,6 +111,7 @@ class ResearchService:
         self.efsa_connector = efsa_connector
         self.fooddata_connector = fooddata_connector
         self.climatiq_connector = climatiq_connector
+        self.commerce_connector = commerce_connector
 
     def run_science_research(
         self,
@@ -840,6 +843,121 @@ class ResearchService:
             },
         )
 
+    def enrich_with_commerce(self, *, run_id: str, limit: int, line: str = "supermercados") -> dict[str, Any]:
+        if self.commerce_connector is None:
+            raise RuntimeError("CLI Market connector is not configured")
+        run = self.store.get_run(run_id)
+        query, from_date, target_market = _run_context(run)
+        request_id: str | None = None
+        try:
+            response = self.commerce_connector.search(
+                query=query,
+                from_publication_date=from_date,
+                limit=limit,
+                target_market=target_market,
+                line=line,
+            )
+            request_id = self.store.start_source_request(
+                research_run_id=run_id,
+                source=self.commerce_connector.source,
+                request_url=response.request_url,
+                request_params=response.request_params,
+                license_name=self.commerce_connector.license_name,
+            )
+            self.store.finish_source_request(
+                request_id=request_id,
+                http_status=response.http_status,
+                raw_content=response.raw_content,
+            )
+            for work in response.works:
+                self._store_commerce_work(run_id=run_id, request_id=request_id, work=work)
+            self._save_commerce_summary(run_id=run_id, works=response.works, target_market=target_market)
+        except CLIMarketRequestError as error:
+            if request_id is None:
+                request_params = error.request_params or {"query": query, "country": target_market}
+                request_url = error.request_url or self.commerce_connector.base_url
+                request_id = self.store.start_source_request(
+                    research_run_id=run_id,
+                    source=self.commerce_connector.source,
+                    request_url=request_url,
+                    request_params=request_params,
+                    license_name=self.commerce_connector.license_name,
+                )
+            self.store.fail_source_request(
+                request_id=request_id,
+                http_status=error.http_status,
+                error=str(error),
+                raw_content=error.raw_content,
+            )
+            raise ResearchExecutionError(run_id, str(error)) from error
+        return self.store.get_run_detail(run_id)
+
+    def _store_commerce_work(self, *, run_id: str, request_id: str, work: dict[str, Any]) -> None:
+        external_id = str(work.get("external_id") or "").strip()
+        title = str(work.get("title") or "").strip()
+        if not external_id or not title:
+            return
+        normalized = {
+            "external_id": external_id,
+            "title": title,
+            "best_price": work.get("best_price") or work.get("price"),
+            "best_store": work.get("best_store") or work.get("store"),
+            "brand": work.get("brand"),
+            "prices": work.get("prices"),
+            "country": work.get("country"),
+            "brief": work.get("brief"),
+            "source": work.get("source", "cli_market"),
+        }
+        self.store.add_evidence(
+            research_run_id=run_id,
+            source_request_id=request_id,
+            source="cli_market",
+            domain="commerce",
+            external_id=external_id,
+            title=title,
+            published_at=None,
+            geography=work.get("country"),
+            payload=normalized,
+            dedupe_key=f"cli_market:{external_id}".strip().casefold(),
+        )
+
+    def _save_commerce_summary(self, *, run_id: str, works: list[dict[str, Any]], target_market: str) -> None:
+        prices: list[float] = []
+        store_counter: Counter[str] = Counter()
+        brand_counter: Counter[str] = Counter()
+        brief_payload: dict[str, Any] | None = None
+        for work in works:
+            price = work.get("best_price") or work.get("price")
+            if price is not None:
+                try:
+                    prices.append(float(price))
+                except (TypeError, ValueError):
+                    pass
+            store = work.get("best_store") or work.get("store")
+            if store:
+                store_counter[str(store)] += 1
+            brand = work.get("brand")
+            if brand:
+                brand_counter[str(brand)] += 1
+            if work.get("brief"):
+                brief_payload = work.get("brief")
+        self.store.save_domain_summary(
+            research_run_id=run_id,
+            domain="commerce",
+            summary_type="climarket_aggregation",
+            payload={
+                "target_market": target_market,
+                "shelf_products_count": len([w for w in works if w.get("source") != "cli_market_intel"]),
+                "stores_compared": len(store_counter),
+                "price_min": min(prices) if prices else None,
+                "price_max": max(prices) if prices else None,
+                "price_avg": round(sum(prices) / len(prices), 2) if prices else None,
+                "top_stores": [name for name, _ in store_counter.most_common(10)],
+                "top_brands": [name for name, _ in brand_counter.most_common(10)],
+                "intel_brief": brief_payload,
+            },
+        )
+
     def run_full_pipeline(
         self,
         *,
@@ -867,6 +985,7 @@ class ResearchService:
             lambda: self.enrich_with_patent(run_id=run_id, limit=limit),
             lambda: self.enrich_with_trend(run_id=run_id, limit=limit),
             lambda: self.enrich_with_trade(run_id=run_id, limit=limit, hs_code=hs_code),
+            lambda: self.enrich_with_commerce(run_id=run_id, limit=limit),
             lambda: self.enrich_with_regulatory(run_id=run_id, limit=limit),
             lambda: self.enrich_with_sustainability(run_id=run_id, limit=limit),
             lambda: self.enrich_with_techscout(run_id=run_id, limit=limit),

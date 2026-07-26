@@ -4,14 +4,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pitchavi.storage import ResearchStore
-from pitchavi.taxonomy import ensure_default_taxonomy, resolve_hs_code
+from pit.storage import ResearchStore
+from pit.taxonomy import ensure_default_taxonomy, resolve_hs_code
 
 
 class TaxonomyTests(unittest.TestCase):
     def test_resolve_hs_code_for_cocoa(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = ResearchStore(Path(directory) / "pitchavi.db", Path(directory) / "raw")
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
             ensure_default_taxonomy(store)
             hs = resolve_hs_code(
                 store,
@@ -22,7 +22,7 @@ class TaxonomyTests(unittest.TestCase):
 
     def test_resolve_hs_code_for_blueberry_synonym(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = ResearchStore(Path(directory) / "pitchavi.db", Path(directory) / "raw")
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
             ensure_default_taxonomy(store)
             hs = resolve_hs_code(
                 store,

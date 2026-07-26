@@ -1,4 +1,4 @@
-"""NIH RePORTER connector."""
+"""Crossref connector for bibliographic metadata enrichment."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-class NIHReporterRequestError(RuntimeError):
+class CrossrefRequestError(RuntimeError):
     def __init__(
         self,
         message: str,
@@ -28,7 +28,7 @@ class NIHReporterRequestError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class NIHReporterResponse:
+class CrossrefResponse:
     request_url: str
     request_params: dict[str, Any]
     http_status: int
@@ -36,73 +36,66 @@ class NIHReporterResponse:
     works: list[dict[str, Any]]
 
 
-class NIHReporterConnector:
-    source = "nih_reporter"
-    license_name = "NIH RePORTER; public data"
-    base_url = "https://api.reporter.nih.gov/v2/projects/search"
+class CrossrefConnector:
+    source = "crossref"
+    license_name = "Crossref REST API metadata; attribution and etiquette required"
+    base_url = "https://api.crossref.org/works"
 
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> NIHReporterResponse:
+    def __init__(self, contact_email: str | None = None) -> None:
+        self.contact_email = contact_email
+
+    def search(self, *, query: str, limit: int) -> CrossrefResponse:
         params: dict[str, str] = {
-            "query": query,
-            "from_date": from_publication_date,
-            "to_date": "3000-01-01",
-            "limit": str(limit),
-            "format": "json",
+            "query.bibliographic": query,
+            "rows": str(limit),
         }
+        if self.contact_email:
+            params["mailto"] = self.contact_email
         request_url = f"{self.base_url}?{urlencode(params)}"
-        request = Request(
-            request_url,
-            headers={"User-Agent": "Pitchavi/0.1 research-service"},
-        )
+        headers = {"User-Agent": "PIT/0.1 research-service"}
+        if self.contact_email:
+            headers["User-Agent"] = f"PIT/0.1 (mailto:{self.contact_email})"
+        request = Request(request_url, headers=headers)
         try:
             with urlopen(request, timeout=20) as response:
                 raw_content = response.read()
                 http_status = response.status
         except HTTPError as error:
             raw_content = error.read()
-            raise NIHReporterRequestError(
-                f"NIH RePORTER returned HTTP {error.code}",
+            raise CrossrefRequestError(
+                f"Crossref returned HTTP {error.code}",
                 http_status=error.code,
                 raw_content=raw_content,
                 request_url=request_url,
                 request_params=params,
             ) from error
         except URLError as error:
-            raise NIHReporterRequestError(
-                f"NIH RePORTER network error: {error.reason}",
+            raise CrossrefRequestError(
+                f"Crossref network error: {error.reason}",
                 request_url=request_url,
                 request_params=params,
             ) from error
 
         try:
             body = json.loads(raw_content)
-            results = body.get("results", [])
-        except (json.JSONDecodeError, AttributeError, TypeError) as error:
-            raise NIHReporterRequestError(
-                "NIH RePORTER response did not contain results",
+            works = body["message"]["items"]
+        except (KeyError, TypeError, json.JSONDecodeError) as error:
+            raise CrossrefRequestError(
+                "Crossref response did not contain message.items",
                 http_status=http_status,
                 raw_content=raw_content,
                 request_url=request_url,
                 request_params=params,
             ) from error
-
-        works: list[dict[str, Any]] = []
-        for item in results:
-            title = item.get("project_title")
-            if not title:
-                continue
-            works.append({
-                "project_id": item.get("project_number"),
-                "title": title,
-                "start_date": item.get("start_date"),
-                "end_date": item.get("end_date"),
-                "funding_amount": item.get("total_cost"),
-                "currency": "USD",
-                "organizations": item.get("organization", []),
-                "source": "nih_reporter",
-            })
-
-        return NIHReporterResponse(
+        if not isinstance(works, list):
+            raise CrossrefRequestError(
+                "Crossref response did not contain a works list",
+                http_status=http_status,
+                raw_content=raw_content,
+                request_url=request_url,
+                request_params=params,
+            )
+        return CrossrefResponse(
             request_url=request_url,
             request_params=params,
             http_status=http_status,

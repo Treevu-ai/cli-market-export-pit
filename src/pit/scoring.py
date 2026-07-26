@@ -18,6 +18,8 @@ def estimate_coverage(domain: str, payloads: dict[str, Any]) -> float:
         return 0.8 if payloads.get("gdelt_aggregation") else 0.0
     if domain == "trade":
         return 0.9 if payloads.get("comtrade_aggregation") else 0.0
+    if domain == "commerce":
+        return 0.85 if payloads.get("climarket_aggregation") else 0.0
     if domain == "regulatory":
         return 0.7 if payloads.get("regulatory_aggregation") else 0.0
     if domain == "sustainability":
@@ -46,6 +48,11 @@ def estimate_score(domain: str, payloads: dict[str, Any]) -> int:
         agg = payloads.get("comtrade_aggregation", {})
         count = agg.get("trade_records_count", 0)
         return min(100, max(0, count * 20))
+    if domain == "commerce":
+        agg = payloads.get("climarket_aggregation", {})
+        count = agg.get("shelf_products_count", 0)
+        stores = agg.get("stores_compared", 0)
+        return min(100, max(0, count * 4 + stores * 8))
     if domain == "regulatory":
         agg = payloads.get("regulatory_aggregation", {})
         count = agg.get("total_records", 0)
@@ -64,10 +71,11 @@ def estimate_score(domain: str, payloads: dict[str, Any]) -> int:
 class ScoringEngine:
     score_version = "v1.0-mvp"
     weights = {
-        "science": 0.30,
-        "patent": 0.20,
-        "trend": 0.20,
-        "trade": 0.30,
+        "science": 0.25,
+        "patent": 0.15,
+        "trend": 0.15,
+        "trade": 0.25,
+        "commerce": 0.20,
     }
     coverage_threshold = 0.60
 

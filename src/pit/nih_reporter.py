@@ -1,4 +1,4 @@
-"""Climatiq / Agribalyse connector for carbon footprint."""
+"""NIH RePORTER connector."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-class ClimatiqRequestError(RuntimeError):
+class NIHReporterRequestError(RuntimeError):
     def __init__(
         self,
         message: str,
@@ -28,7 +28,7 @@ class ClimatiqRequestError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class ClimatiqResponse:
+class NIHReporterResponse:
     request_url: str
     request_params: dict[str, Any]
     http_status: int
@@ -36,26 +36,23 @@ class ClimatiqResponse:
     works: list[dict[str, Any]]
 
 
-class ClimatiqConnector:
-    source = "climatiq"
-    license_name = "Climatiq; commercial with attribution"
-    base_url = "https://api.climatiq.io/v2/search"
+class NIHReporterConnector:
+    source = "nih_reporter"
+    license_name = "NIH RePORTER; public data"
+    base_url = "https://api.reporter.nih.gov/v2/projects/search"
 
-    def __init__(self, api_key: str | None = None) -> None:
-        self.api_key = api_key
-
-    def search(self, *, query: str, from_publication_date: str, limit: int) -> ClimatiqResponse:
+    def search(self, *, query: str, from_publication_date: str, limit: int) -> NIHReporterResponse:
         params: dict[str, str] = {
             "query": query,
+            "from_date": from_publication_date,
+            "to_date": "3000-01-01",
             "limit": str(limit),
+            "format": "json",
         }
         request_url = f"{self.base_url}?{urlencode(params)}"
-        headers = {"User-Agent": "Pitchavi/0.1 research-service"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
         request = Request(
             request_url,
-            headers=headers,
+            headers={"User-Agent": "PIT/0.1 research-service"},
         )
         try:
             with urlopen(request, timeout=20) as response:
@@ -63,26 +60,26 @@ class ClimatiqConnector:
                 http_status = response.status
         except HTTPError as error:
             raw_content = error.read()
-            raise ClimatiqRequestError(
-                f"Climatiq returned HTTP {error.code}",
+            raise NIHReporterRequestError(
+                f"NIH RePORTER returned HTTP {error.code}",
                 http_status=error.code,
                 raw_content=raw_content,
                 request_url=request_url,
                 request_params=params,
             ) from error
         except URLError as error:
-            raise ClimatiqRequestError(
-                f"Climatiq network error: {error.reason}",
+            raise NIHReporterRequestError(
+                f"NIH RePORTER network error: {error.reason}",
                 request_url=request_url,
                 request_params=params,
             ) from error
 
         try:
             body = json.loads(raw_content)
-            results = body.get("data", [])
+            results = body.get("results", [])
         except (json.JSONDecodeError, AttributeError, TypeError) as error:
-            raise ClimatiqRequestError(
-                "Climatiq response did not contain data",
+            raise NIHReporterRequestError(
+                "NIH RePORTER response did not contain results",
                 http_status=http_status,
                 raw_content=raw_content,
                 request_url=request_url,
@@ -91,16 +88,21 @@ class ClimatiqConnector:
 
         works: list[dict[str, Any]] = []
         for item in results:
+            title = item.get("project_title")
+            if not title:
+                continue
             works.append({
-                "activity_id": item.get("id"),
-                "name": item.get("name"),
-                "category": item.get("category"),
-                "unit": item.get("unit"),
-                "co2e_factor": item.get("co2e_factor"),
-                "source": "climatiq",
+                "project_id": item.get("project_number"),
+                "title": title,
+                "start_date": item.get("start_date"),
+                "end_date": item.get("end_date"),
+                "funding_amount": item.get("total_cost"),
+                "currency": "USD",
+                "organizations": item.get("organization", []),
+                "source": "nih_reporter",
             })
 
-        return ClimatiqResponse(
+        return NIHReporterResponse(
             request_url=request_url,
             request_params=params,
             http_status=http_status,

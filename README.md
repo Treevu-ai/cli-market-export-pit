@@ -1,4 +1,4 @@
-# PIT CLI Market Export Intelligence
+# PIT — CLI Market Export Intelligence
 
 Motor de **inteligencia exportadora con evidencia trazable** para CLI Market. Dado un producto y mercado objetivo, consulta fuentes públicas, guarda respuestas crudas inmutables (SHA-256), normaliza evidencia y produce scores + reporte para decidir si vale la pena exportar.
 
@@ -12,13 +12,13 @@ Consulta + mercado → Research Run → Conectores (14 fuentes)
     → Scoring (ScoringEngine v1.0-mvp) → Claims → Reporte JSON/PDF
 ```
 
-**Dominios:** `science`, `patent`, `trend`, `trade`, `regulatory`, `sustainability`, `technology_scout`
+**Dominios:** `science`, `patent`, `trend`, `trade`, `commerce`, `regulatory`, `sustainability`, `technology_scout`
 
 ## Ejecutar
 
 ```powershell
 $env:PYTHONPATH = "src"
-python -m uvicorn pitchavi.api:app --reload
+python -m uvicorn pit.api:app --reload
 ```
 
 API: http://127.0.0.1:8000/docs
@@ -41,7 +41,7 @@ docker compose up --build
 | GET | `/v1/research-runs/{id}/report.pdf` | Reporte PDF |
 | GET | `/v1/connectors/status` | Salud de conectores |
 
-Dominios de enrichment: `crossref`, `pubmed`, `semanticscholar`, `patent`, `trend`, `trade`, `regulatory`, `sustainability`, `techscout`.
+Dominios de enrichment: `crossref`, `pubmed`, `semanticscholar`, `patent`, `trend`, `trade`, `commerce`, `regulatory`, `sustainability`, `techscout`.
 
 ## Ejemplo — pipeline completo
 
@@ -56,23 +56,29 @@ Invoke-RestMethod -Method Post `
 
 | Variable | Descripción |
 |----------|-------------|
-| `PITCHAVI_DB_PATH` | SQLite DB (default: `data/pitchavi.db`) |
-| `PITCHAVI_RAW_DIR` | Raw responses (default: `data/raw`) |
+| `PIT_DB_PATH` | SQLite DB (default: `data/pit.db`) |
+| `PIT_RAW_DIR` | Raw responses (default: `data/raw`) |
 | `DATABASE_URL` | PostgreSQL (`postgresql://...`) |
-| `PITCHAVI_CONTACT_EMAIL` | Email para pool cortés Crossref |
-| `PITCHAVI_API_KEY` | API key (header `X-API-Key`) |
-| `PITCHAVI_CORS_ORIGINS` | Orígenes CORS separados por coma |
+| `PIT_CONTACT_EMAIL` | Email para pool cortés Crossref |
+| `PIT_API_KEY` | API key (header `X-API-Key`) |
+| `PIT_CORS_ORIGINS` | Orígenes CORS separados por coma |
 | `EPO_OPS_CONSUMER_KEY` / `SECRET` | Patentes EPO OPS |
 | `FOODDATA_CENTRAL_API_KEY` | USDA FoodData Central |
 | `CLIMATIQ_API_KEY` | Huella de carbono Climatiq |
+| `CLIMARKET_API_KEY` / `MARKET_API_KEY` | CLI Market shelf prices e intel |
+| `CLIMARKET_API_URL` / `MARKET_API_URL` | API CLI Market (default: `https://cli-market-api.fly.dev`) |
 
 ## Taxonomía y HS codes
 
 Al crear un run se carga la taxonomía `cacao-functional-v1` con sinónimos (cacao/cocoa, arándano/blueberry, quinoa) y mapeos HS para Comtrade. El enrichment de `trade` resuelve el código HS automáticamente si no se pasa `hs_code`.
 
+## CLI Market (góndola)
+
+El dominio `commerce` consulta la API de [CLI Market](https://cli-market-api.fly.dev): comparación de precios en góndola (`/products/compare`) e inteligencia de mercado (`/v1/intel/brief`) filtrada por `target_market` y línea `supermercados`.
+
 ## Scoring
 
-Pesos v1.0-mvp: Science 30%, Patent 20%, Trend 20%, Trade 30%. Recomendaciones: `Investigate`, `Validate`, `Deprioritize`, `Insufficient evidence`. Ver `docs/scoring_calibration.md`.
+Pesos v1.0-mvp: Science 25%, Patent 15%, Trend 15%, Trade 25%, Commerce 20%. Recomendaciones: `Investigate`, `Validate`, `Deprioritize`, `Insufficient evidence`. Ver `docs/scoring_calibration.md`.
 
 ## Tests
 

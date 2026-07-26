@@ -22,7 +22,7 @@ def _now() -> str:
 
 
 class ResearchStore:
-    """Owns Pitchavi metadata and content-addressed source responses."""
+    """Owns PIT metadata and content-addressed source responses."""
 
     def __init__(self, database_path: Path, raw_directory: Path, database_url: str | None = None) -> None:
         self.database_url = database_url or os.getenv("DATABASE_URL", "")

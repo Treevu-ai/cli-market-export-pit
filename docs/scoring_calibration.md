@@ -1,16 +1,17 @@
 # Scoring Weights Calibration
 
 ## Current Weights (v1.0-mvp)
-- Science: 0.30
-- Patent: 0.20
-- Trend: 0.20
-- Trade: 0.30
+- Science: 0.25
+- Patent: 0.15
+- Trend: 0.15
+- Trade: 0.25
+- Commerce (CLI Market shelf): 0.20
 
 ## Calibration Cases
 
-| Case | Science | Patent | Trend | Trade | Expected Recommendation |
-|---|---|---|---|---|---|
-| Cocoa flavanol (all domains) | 80 | 60 | 50 | 70 | Investigate |
+| Case | Science | Patent | Trend | Trade | Commerce | Expected Recommendation |
+|---|---|---|---|---|---|---|
+| Cocoa flavanol (all domains) | 80 | 60 | 50 | 70 | 75 | Investigate |
 | Quinoa protein (partial) | 40 | 20 | 0 | 30 | Deprioritize / Insufficient evidence |
 | Novel ingredient (science only) | 90 | 0 | 0 | 0 | Insufficient evidence |
 

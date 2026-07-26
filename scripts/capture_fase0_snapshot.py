@@ -10,7 +10,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-from pitchavi.storage import ResearchStore
+from pit.storage import ResearchStore
 
 CSS = """
 * { box-sizing: border-box; }
@@ -143,13 +143,13 @@ def render_html(run: dict) -> str:
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Pitchavi — consulta Fase 0</title>
+  <title>PIT — consulta Fase 0</title>
   <style>{CSS}</style>
 </head>
 <body>
   <div class="card">
     <div class="header">
-      <h1>Pitchavi · Consulta de investigación</h1>
+      <h1>PIT · Consulta de investigación</h1>
       <p>Fase 0 — evidencia científica trazable · julio 2026</p>
     </div>
     <div class="meta">
@@ -202,7 +202,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", required=True)
     parser.add_argument("-o", "--output", type=Path, required=True)
-    parser.add_argument("--db", type=Path, default=Path("data/pitchavi.db"))
+    parser.add_argument("--db", type=Path, default=Path("data/pit.db"))
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)

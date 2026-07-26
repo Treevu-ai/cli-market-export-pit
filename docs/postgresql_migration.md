@@ -28,7 +28,7 @@ This document describes the migration path from SQLite (current) to PostgreSQL f
 
 ## Connection String
 ```
-postgresql://user:pass@host:5432/pitchavi
+postgresql://user:pass@host:5432/pit
 ```
 
 ## Rollback

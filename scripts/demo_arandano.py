@@ -9,31 +9,32 @@ import sys
 import tempfile
 from pathlib import Path
 
-from pitchavi.reports import ReportGenerator
-from pitchavi.research import ResearchService
-from pitchavi.scoring import ScoringService
-from pitchavi.storage import ResearchStore
-from pitchavi.openalex import OpenAlexConnector
-from pitchavi.crossref import CrossrefConnector
-from pitchavi.pubmed import PubMedConnector
-from pitchavi.semanticscholar import SemanticScholarConnector
-from pitchavi.gdelt import GDELTConnector
-from pitchavi.comtrade import ComtradeConnector
-from pitchavi.openfda import OpenFDAConnector
-from pitchavi.efsa_eurlex import EFSALexConnector
-from pitchavi.fooddata_central import FoodDataCentralConnector
-from pitchavi.cordis import CORDISConnector
-from pitchavi.nih_reporter import NIHReporterConnector
-from pitchavi.nsf_awards import NSFAwardsConnector
+from pit.reports import ReportGenerator
+from pit.research import ResearchService
+from pit.scoring import ScoringService
+from pit.storage import ResearchStore
+from pit.openalex import OpenAlexConnector
+from pit.crossref import CrossrefConnector
+from pit.pubmed import PubMedConnector
+from pit.semanticscholar import SemanticScholarConnector
+from pit.gdelt import GDELTConnector
+from pit.comtrade import ComtradeConnector
+from pit.openfda import OpenFDAConnector
+from pit.efsa_eurlex import EFSALexConnector
+from pit.fooddata_central import FoodDataCentralConnector
+from pit.climarket import CLIMarketConnector
+from pit.cordis import CORDISConnector
+from pit.nih_reporter import NIHReporterConnector
+from pit.nsf_awards import NSFAwardsConnector
 
 
 def main() -> int:
-    output_dir = Path(os.getenv("PITCHAVI_DEMO_DIR", tempfile.mkdtemp(prefix="pitchavi-demo-")))
-    store = ResearchStore(output_dir / "pitchavi.db", output_dir / "raw")
+    output_dir = Path(os.getenv("PIT_DEMO_DIR", tempfile.mkdtemp(prefix="pit-demo-")))
+    store = ResearchStore(output_dir / "pit.db", output_dir / "raw")
     service = ResearchService(
         store,
         OpenAlexConnector(),
-        CrossrefConnector(os.getenv("PITCHAVI_CONTACT_EMAIL")),
+        CrossrefConnector(os.getenv("PIT_CONTACT_EMAIL")),
         PubMedConnector(),
         SemanticScholarConnector(),
         None,
@@ -46,11 +47,12 @@ def main() -> int:
         EFSALexConnector(),
         FoodDataCentralConnector(api_key=os.getenv("FOODDATA_CENTRAL_API_KEY")),
         None,
+        CLIMarketConnector(),
     )
     scoring = ScoringService(store)
     report_gen = ReportGenerator()
 
-    print("Pitchavi demo: arándano orgánico → US")
+    print("PIT demo: arándano orgánico → US")
     print(f"Output: {output_dir}")
     try:
         run = service.run_full_pipeline(

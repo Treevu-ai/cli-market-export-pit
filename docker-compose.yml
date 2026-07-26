@@ -6,15 +6,17 @@ services:
     ports:
       - "8000:8000"
     environment:
-      PITCHAVI_DB_PATH: /data/pitchavi.db
-      PITCHAVI_RAW_DIR: /data/raw
-      PITCHAVI_API_KEY: ${PITCHAVI_API_KEY:-}
-      PITCHAVI_CONTACT_EMAIL: ${PITCHAVI_CONTACT_EMAIL:-}
+      PIT_DB_PATH: /data/pit.db
+      PIT_RAW_DIR: /data/raw
+      PIT_API_KEY: ${PIT_API_KEY:-}
+      PIT_CONTACT_EMAIL: ${PIT_CONTACT_EMAIL:-}
       EPO_OPS_CONSUMER_KEY: ${EPO_OPS_CONSUMER_KEY:-}
       EPO_OPS_CONSUMER_SECRET: ${EPO_OPS_CONSUMER_SECRET:-}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://pitchavi:pitchavi@db:5432/pitchavi}
+      CLIMARKET_API_KEY: ${CLIMARKET_API_KEY:-${MARKET_API_KEY:-}}
+      CLIMARKET_API_URL: ${CLIMARKET_API_URL:-https://cli-market-api.fly.dev}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://pit:pit@db:5432/pit}
     volumes:
-      - pitchavi_data:/data
+      - pit_data:/data
     depends_on:
       db:
         condition: service_healthy
@@ -27,17 +29,17 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: pitchavi
-      POSTGRES_PASSWORD: pitchavi
-      POSTGRES_DB: pitchavi
+      POSTGRES_USER: pit
+      POSTGRES_PASSWORD: pit
+      POSTGRES_DB: pit
     volumes:
-      - pitchavi_pgdata:/var/lib/postgresql/data
+      - pit_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pitchavi"]
+      test: ["CMD-SHELL", "pg_isready -U pit"]
       interval: 10s
       timeout: 5s
       retries: 5
 
 volumes:
-  pitchavi_data:
-  pitchavi_pgdata:
+  pit_data:
+  pit_pgdata:

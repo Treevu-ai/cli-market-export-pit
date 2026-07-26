@@ -44,7 +44,7 @@ class ReportGenerator:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", "B", 16)
-        pdf.cell(200, 10, "Pitchavi Research Report", ln=True)
+        pdf.cell(200, 10, "PIT Research Report", ln=True)
         pdf.set_font("Arial", "", 12)
         pdf.cell(200, 10, f"Run: {run['id']}", ln=True)
         pdf.cell(200, 10, f"Query: {run['query_original']}", ln=True)

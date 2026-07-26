@@ -7,25 +7,26 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from pitchavi.api import create_app
-from pitchavi.comtrade import ComtradeResponse
-from pitchavi.cordis import CORDISResponse
-from pitchavi.crossref import CrossrefResponse
-from pitchavi.epo_ops import EPOOPSResponse
-from pitchavi.gdelt import GDELTResponse
-from pitchavi.nih_reporter import NIHReporterResponse
-from pitchavi.nsf_awards import NSFAwardsResponse
-from pitchavi.openalex import OpenAlexRequestError, OpenAlexResponse
-from pitchavi.openfda import OpenFDAResponse
-from pitchavi.efsa_eurlex import EFSALexResponse
-from pitchavi.fooddata_central import FoodDataCentralResponse
-from pitchavi.climatiq import ClimatiqResponse
-from pitchavi.pubmed import PubMedResponse
-from pitchavi.research import ResearchExecutionError, ResearchService
-from pitchavi.scoring import ScoringService
-from pitchavi.reports import ReportGenerator
-from pitchavi.semanticscholar import SemanticScholarResponse
-from pitchavi.storage import ResearchStore
+from pit.api import create_app
+from pit.comtrade import ComtradeResponse
+from pit.cordis import CORDISResponse
+from pit.crossref import CrossrefResponse
+from pit.epo_ops import EPOOPSResponse
+from pit.gdelt import GDELTResponse
+from pit.nih_reporter import NIHReporterResponse
+from pit.nsf_awards import NSFAwardsResponse
+from pit.openalex import OpenAlexRequestError, OpenAlexResponse
+from pit.openfda import OpenFDAResponse
+from pit.efsa_eurlex import EFSALexResponse
+from pit.fooddata_central import FoodDataCentralResponse
+from pit.climatiq import ClimatiqResponse
+from pit.climarket import CLIMarketResponse
+from pit.pubmed import PubMedResponse
+from pit.research import ResearchExecutionError, ResearchService
+from pit.scoring import ScoringService
+from pit.reports import ReportGenerator
+from pit.semanticscholar import SemanticScholarResponse
+from pit.storage import ResearchStore
 
 
 class SuccessfulConnector:
@@ -403,6 +404,38 @@ class SuccessfulFoodDataCentralConnector:
         )
 
 
+class SuccessfulCLIMarketConnector:
+    source = "cli_market"
+    license_name = "CLI Market shelf data; attribution required"
+    base_url = "https://cli-market-api.fly.dev"
+
+    def search(self, *, query: str, from_publication_date: str, limit: int, target_market: str | None = None, line: str = "supermercados") -> CLIMarketResponse:
+        return CLIMarketResponse(
+            request_url="https://cli-market-api.fly.dev/products/compare",
+            request_params={"query": query, "country": target_market or "US", "line": line, "limit": str(limit)},
+            http_status=200,
+            raw_content=b'{"comparison":[{"name":"Organic Blueberry 1lb","brand":"Fresh Farms","best_price":5.99,"best_store":"vitacost_us","prices":{"vitacost_us":5.99}}]}',
+            works=[
+                {
+                    "external_id": "compare:0:organic blueberry 1lb",
+                    "title": "Organic Blueberry 1lb",
+                    "brand": "Fresh Farms",
+                    "best_price": 5.99,
+                    "best_store": "vitacost_us",
+                    "prices": {"vitacost_us": 5.99},
+                    "country": target_market or "US",
+                    "source": "cli_market_compare",
+                },
+                {
+                    "external_id": "brief:US:supermercados",
+                    "title": "CLI Market intel brief (US/supermercados)",
+                    "brief": {"pressure": "stable"},
+                    "source": "cli_market_intel",
+                },
+            ],
+        )
+
+
 class ResearchServiceTests(unittest.TestCase):
     def _service(
         self,
@@ -421,8 +454,9 @@ class ResearchServiceTests(unittest.TestCase):
         efsa_connector=None,
         fooddata_connector=None,
         climatiq_connector=None,
+        commerce_connector=None,
     ) -> tuple[ResearchStore, ResearchService]:
-        store = ResearchStore(Path(directory) / "pitchavi.db", Path(directory) / "raw")
+        store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
         return store, ResearchService(
             store,
             connector,
@@ -439,6 +473,7 @@ class ResearchServiceTests(unittest.TestCase):
             efsa_connector,
             fooddata_connector,
             climatiq_connector,
+            commerce_connector,
         )
 
     def test_persists_immutable_raw_response_and_normalized_evidence(self) -> None:
@@ -621,7 +656,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_taxonomy_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store = ResearchStore(Path(directory) / "pitchavi.db", Path(directory) / "raw")
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
             taxonomy = store.create_taxonomy(name="cacao-functional", version="v2")
             self.assertIn("id", taxonomy)
             fetched = store.get_taxonomy(name="cacao-functional", version="v2")
@@ -774,7 +809,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_api_key_required_when_set(self) -> None:
         import os
-        os.environ["PITCHAVI_API_KEY"] = "secret123"
+        os.environ["PIT_API_KEY"] = "secret123"
         try:
             with tempfile.TemporaryDirectory() as directory:
                 _, service = self._service(directory, SuccessfulConnector())
@@ -784,7 +819,7 @@ class ResearchServiceTests(unittest.TestCase):
                 response = client.get("/v1/health", headers={"X-API-Key": "secret123"})
                 self.assertEqual(response.status_code, 200)
         finally:
-            os.environ.pop("PITCHAVI_API_KEY", None)
+            os.environ.pop("PIT_API_KEY", None)
 
     def test_techscout_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -861,6 +896,28 @@ class ResearchServiceTests(unittest.TestCase):
             self.assertIn("climatiq_aggregation", summaries)
             self.assertEqual(summaries["climatiq_aggregation"]["activity_count"], 1)
 
+
+    def test_commerce_enrichment_stores_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, service = self._service(
+                directory,
+                SuccessfulConnector(),
+                commerce_connector=SuccessfulCLIMarketConnector(),
+            )
+            initial = service.run_science_research(
+                query="organic blueberry",
+                target_market="US",
+                application="fresh fruit export",
+                cutoff_at="2026-07-24T00:00:00+00:00",
+                from_publication_date="2021-01-01",
+                limit=10,
+            )
+            enriched = service.enrich_with_commerce(run_id=initial["id"], limit=10)
+            commerce_evidence = [e for e in enriched["evidence"] if e["domain"] == "commerce"]
+            self.assertEqual(len(commerce_evidence), 2)
+            summaries = enriched.get("summaries", {})
+            self.assertIn("climarket_aggregation", summaries)
+            self.assertEqual(summaries["climarket_aggregation"]["shelf_products_count"], 1)
 
     def test_full_pipeline_endpoint_runs_science_step(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

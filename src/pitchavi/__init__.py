@@ -1,2 +1,0 @@
-"""Pitchavi traceable research service."""
-

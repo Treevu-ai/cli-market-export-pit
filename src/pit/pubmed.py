@@ -54,7 +54,7 @@ class PubMedConnector:
             "sort": "relevance",
         }
         request_url = f"{self.base_url}?{urlencode(search_params)}"
-        request = Request(request_url, headers={"User-Agent": "Pitchavi/0.1 research-service"})
+        request = Request(request_url, headers={"User-Agent": "PIT/0.1 research-service"})
         try:
             with urlopen(request, timeout=20) as response:
                 raw_content = response.read()
@@ -103,7 +103,7 @@ class PubMedConnector:
             "retmax": str(limit),
         }
         summary_request_url = f"{self.summary_url}?{urlencode(summary_params)}"
-        summary_request = Request(summary_request_url, headers={"User-Agent": "Pitchavi/0.1 research-service"})
+        summary_request = Request(summary_request_url, headers={"User-Agent": "PIT/0.1 research-service"})
         try:
             with urlopen(summary_request, timeout=20) as response:
                 summary_raw = response.read()

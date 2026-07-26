@@ -70,7 +70,7 @@ class FoodDataCentralConnector:
         request_url = f"{self.base_url}?{urlencode(params)}"
         request = Request(
             request_url,
-            headers={"User-Agent": "Pitchavi/0.1 research-service"},
+            headers={"User-Agent": "PIT/0.1 research-service"},
         )
         try:
             with urlopen(request, timeout=20) as response:
