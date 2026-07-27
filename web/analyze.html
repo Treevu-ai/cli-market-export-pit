@@ -81,9 +81,35 @@
               <p style="color:var(--text-secondary);font-size:0.9rem;margin:0.35rem 0 0;" id="run-meta">—</p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="ficha-btn" type="button" style="font-size:0.85rem;padding:0.5rem 0.9rem;" disabled title="Comprobando agentes…">Generar Ficha</button>
               <a class="btn btn-secondary" id="pdf-link" href="#" target="_blank" rel="noreferrer" style="font-size:0.85rem;padding:0.5rem 0.9rem;">PDF ejecutivo</a>
               <button class="btn btn-secondary" id="json-toggle" type="button" style="font-size:0.85rem;padding:0.5rem 0.9rem;">Ver JSON</button>
             </div>
+          </div>
+
+          <div id="ficha-options" class="hidden ficha-options">
+            <label>
+              Segmento
+              <input type="text" id="ficha-segment" value="exportadores y retail premium" maxlength="200">
+            </label>
+            <label>
+              Etapa
+              <select id="ficha-stage">
+                <option value="idea">idea</option>
+                <option value="concepto" selected>concepto</option>
+                <option value="prototipo">prototipo</option>
+                <option value="piloto">piloto</option>
+                <option value="escalamiento">escalamiento</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="ficha-panel" class="hidden ficha-panel">
+            <div class="ficha-header">
+              <h3 style="font-family:var(--font-display);font-size:1.1rem;margin:0;">Ficha de oportunidad</h3>
+              <button class="btn btn-secondary" id="ficha-download" type="button" style="font-size:0.8rem;padding:0.4rem 0.75rem;">Descargar .md</button>
+            </div>
+            <pre id="ficha-markdown" class="ficha-markdown"></pre>
           </div>
 
           <div class="score-hero">

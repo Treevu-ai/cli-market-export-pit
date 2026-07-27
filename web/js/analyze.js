@@ -1,6 +1,8 @@
 import {
   RECOMMENDATION_LABELS,
+  fetchAgentsStatus,
   fetchReport,
+  generateFicha,
   getApiBase,
   reportPdfUrl,
   runFullPipeline,
@@ -15,6 +17,17 @@ const submitBtn = document.getElementById("submit-btn");
 const apiBaseEl = document.getElementById("api-base");
 const jsonToggle = document.getElementById("json-toggle");
 const jsonRaw = document.getElementById("json-raw");
+const fichaBtn = document.getElementById("ficha-btn");
+const fichaOptions = document.getElementById("ficha-options");
+const fichaPanel = document.getElementById("ficha-panel");
+const fichaMarkdown = document.getElementById("ficha-markdown");
+const fichaDownload = document.getElementById("ficha-download");
+const fichaSegment = document.getElementById("ficha-segment");
+const fichaStage = document.getElementById("ficha-stage");
+
+let currentRunId = null;
+let currentFichaMarkdown = "";
+let fichaAvailable = false;
 
 const COMPLEMENTARY_KEYS = {
   regulatory_aggregation: {
@@ -41,6 +54,37 @@ const COMPLEMENTARY_KEYS = {
 };
 
 if (apiBaseEl) apiBaseEl.textContent = getApiBase();
+
+async function refreshAgentsStatus() {
+  if (!fichaBtn) return;
+  try {
+    const status = await fetchAgentsStatus();
+    fichaAvailable = Boolean(status.ficha_available);
+    fichaBtn.disabled = !fichaAvailable || !currentRunId;
+    fichaBtn.title = fichaAvailable
+      ? "Genera una ficha ejecutiva con agentes de inteligencia de producto"
+      : status.reason || "Agentes no disponibles en el servidor";
+  } catch {
+    fichaAvailable = false;
+    fichaBtn.disabled = true;
+    fichaBtn.title = "No se pudo comprobar el estado de los agentes";
+  }
+}
+
+refreshAgentsStatus();
+
+function resetFichaPanel() {
+  currentFichaMarkdown = "";
+  if (fichaPanel) fichaPanel.classList.add("hidden");
+  if (fichaMarkdown) fichaMarkdown.textContent = "";
+}
+
+function showFichaPanel(markdown) {
+  currentFichaMarkdown = markdown;
+  if (fichaMarkdown) fichaMarkdown.textContent = markdown;
+  fichaPanel?.classList.remove("hidden");
+  fichaPanel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
 
 function setStatus(kind, label) {
   if (!statusPill) return;
@@ -167,6 +211,14 @@ function renderReport(report) {
   const pdfLink = document.getElementById("pdf-link");
   if (pdfLink) pdfLink.href = reportPdfUrl(report.run_id);
 
+  currentRunId = report.run_id;
+  resetFichaPanel();
+  fichaOptions?.classList.remove("hidden");
+  if (fichaBtn) {
+    fichaBtn.disabled = !fichaAvailable;
+    fichaBtn.textContent = "Generar Ficha";
+  }
+
   renderDimensions(score.dimensions || {});
   renderComplementary(report.evidence_summary || {});
   renderChecklist(report.improvement_checklist || []);
@@ -214,6 +266,44 @@ document.querySelectorAll(".preset-btn").forEach((button) => {
 if (jsonToggle && jsonRaw) {
   jsonToggle.addEventListener("click", () => {
     jsonRaw.classList.toggle("hidden");
+  });
+}
+
+if (fichaBtn) {
+  fichaBtn.addEventListener("click", async () => {
+    if (!currentRunId || !fichaAvailable) return;
+    clearError();
+    fichaBtn.disabled = true;
+    fichaBtn.textContent = "Generando ficha…";
+    setStatus("running", "Agentes en ejecución…");
+
+    try {
+      const result = await generateFicha(currentRunId, {
+        segment: fichaSegment?.value?.trim() || "exportadores y retail premium",
+        stage: fichaStage?.value || "concepto",
+      });
+      showFichaPanel(result.dossier_markdown || "");
+      setStatus("done", "Ficha generada");
+    } catch (error) {
+      setStatus("error", "Error");
+      showError(error.message || String(error));
+    } finally {
+      fichaBtn.disabled = !fichaAvailable;
+      fichaBtn.textContent = "Generar Ficha";
+    }
+  });
+}
+
+if (fichaDownload) {
+  fichaDownload.addEventListener("click", () => {
+    if (!currentFichaMarkdown || !currentRunId) return;
+    const blob = new Blob([currentFichaMarkdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `ficha-${currentRunId}.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   });
 }
 

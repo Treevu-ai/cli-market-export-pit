@@ -39,6 +39,19 @@ export async function fetchReport(runId) {
   return envelope.data;
 }
 
+export async function fetchAgentsStatus() {
+  const envelope = await pitRequest("/v1/agents/status");
+  return envelope.data;
+}
+
+export async function generateFicha(runId, body = {}) {
+  const envelope = await pitRequest(`/v1/research-runs/${runId}/ficha`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return envelope.data;
+}
+
 export function reportPdfUrl(runId) {
   return `${getApiBase()}/v1/research-runs/${runId}/report.pdf`;
 }

@@ -82,6 +82,12 @@ class DomainEnrichmentCreate(BaseModel):
     hs_code: Annotated[str | None, Field(min_length=2, max_length=20)] = None
 
 
+class FichaCreate(BaseModel):
+    segment: Annotated[str, Field(min_length=2, max_length=200)] = "exportadores y retail premium"
+    stage: Annotated[str, Field(min_length=2, max_length=80)] = "concepto"
+    market_label: Annotated[str | None, Field(max_length=120)] = None
+
+
 def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerator]:
     database_path = Path(os.getenv("PIT_DB_PATH", "data/pit.db"))
     raw_directory = Path(os.getenv("PIT_RAW_DIR", "data/raw"))
@@ -339,6 +345,78 @@ def create_app(
         domain_scores = scoring_svc.build_domain_scores(run_id)
         pdf_bytes = report_gen.generate_pdf(run=run, scores=scores, domain_scores=domain_scores)
         return Response(content=pdf_bytes, media_type="application/pdf")
+
+    @app.get("/v1/agents/status")
+    def get_agents_status() -> dict[str, Any]:
+        try:
+            from agents.product_intelligence.ficha_service import agents_status as _agents_status
+        except ImportError:
+            return {
+                "data": {
+                    "ficha_available": False,
+                    "reason": 'Modulo de agentes no encontrado. Instala: pip install -e ".[agents]"',
+                    "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
+                }
+            }
+        return {"data": _agents_status()}
+
+    @app.post("/v1/research-runs/{run_id}/ficha")
+    async def generate_opportunity_ficha(run_id: str, payload: FichaCreate) -> dict[str, Any]:
+        try:
+            run_row = research_service.store.get_run(run_id)
+        except KeyError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+
+        try:
+            from agents.product_intelligence.ficha_service import (
+                agents_dependencies_ready,
+                generate_dossier_for_run,
+            )
+        except ImportError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail='Modulo de agentes no instalado. Ejecuta: pip install -e ".[agents]"',
+            ) from error
+
+        ready, reason = agents_dependencies_ready()
+        if not ready:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=reason)
+
+        run = research_service.store.get_run_detail(run_id)
+        scores = scoring_svc.calculate_scores(run_id)
+        domain_scores = scoring_svc.build_domain_scores(run_id)
+        report = report_gen.generate_json(run=run, scores=scores, domain_scores=domain_scores)
+
+        try:
+            result = await generate_dossier_for_run(
+                run_id=run_id,
+                report=report,
+                query=run_row["query_original"],
+                target_market=run_row["target_market"],
+                segment=payload.segment,
+                stage=payload.stage,
+                market_label=payload.market_label,
+            )
+        except RuntimeError as error:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error)) from error
+        except Exception as error:
+            logger.exception("ficha_generation_failed", extra={"run_id": run_id})
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Error generando ficha: {error}",
+            ) from error
+
+        return {
+            "data": result,
+            "meta": {
+                "confidence": "ok",
+                "pit_run_id": run_id,
+            },
+            "trace": {
+                "version": "0.1.0",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        }
 
     @app.get("/v1/connectors/status")
     async def connectors_status() -> dict[str, Any]:
