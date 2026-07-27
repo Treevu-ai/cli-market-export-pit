@@ -336,7 +336,8 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         run = research_service.store.get_run_detail(run_id)
         scores = scoring_svc.calculate_scores(run_id)
-        pdf_bytes = report_gen.generate_pdf(run=run, scores=scores)
+        domain_scores = scoring_svc.build_domain_scores(run_id)
+        pdf_bytes = report_gen.generate_pdf(run=run, scores=scores, domain_scores=domain_scores)
         return Response(content=pdf_bytes, media_type="application/pdf")
 
     @app.get("/v1/connectors/status")

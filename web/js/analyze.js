@@ -122,6 +122,30 @@ function renderEvidence(evidenceSummary = {}) {
   });
 }
 
+function renderChecklist(checklist = []) {
+  const box = document.getElementById("checklist-box");
+  if (!box) return;
+  if (!checklist.length) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+  box.classList.remove("hidden");
+  box.innerHTML = `
+    <h4>Como mejorar este analisis</h4>
+    <ul>
+      ${checklist
+        .map(
+          (item) => `
+        <li class="checklist-priority-${item.priority}">
+          <strong>${item.priority}</strong> — ${item.title}: ${item.action}
+        </li>`,
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
 function renderReport(report) {
   const score = report.score || {};
   const rec = RECOMMENDATION_LABELS[score.recommendation] || {
@@ -145,6 +169,7 @@ function renderReport(report) {
 
   renderDimensions(score.dimensions || {});
   renderComplementary(report.evidence_summary || {});
+  renderChecklist(report.improvement_checklist || []);
   renderEvidence(report.evidence_summary || {});
 
   const alerts = [

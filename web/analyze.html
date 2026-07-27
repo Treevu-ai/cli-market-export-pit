@@ -81,7 +81,7 @@
               <p style="color:var(--text-secondary);font-size:0.9rem;margin:0.35rem 0 0;" id="run-meta">—</p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-              <a class="btn btn-secondary" id="pdf-link" href="#" target="_blank" rel="noreferrer" style="font-size:0.85rem;padding:0.5rem 0.9rem;">Descargar PDF</a>
+              <a class="btn btn-secondary" id="pdf-link" href="#" target="_blank" rel="noreferrer" style="font-size:0.85rem;padding:0.5rem 0.9rem;">PDF ejecutivo</a>
               <button class="btn btn-secondary" id="json-toggle" type="button" style="font-size:0.85rem;padding:0.5rem 0.9rem;">Ver JSON</button>
             </div>
           </div>
@@ -107,7 +107,9 @@
           <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-top:1.5rem;">Detalle por fuente</h3>
           <div class="evidence-grid" id="evidence-grid"></div>
 
-          <div id="alerts-box" class="hidden" style="margin-top:1rem;padding:1rem;border-radius:var(--radius-sm);background:#fff8d6;color:#7a6200;font-size:0.9rem;"></div>
+          <div id="checklist-box" class="hidden checklist-box"></div>
+
+          <div id="alerts-box" class="hidden alerts-box"></div>
 
           <pre id="json-raw" class="hidden evidence-body" style="margin-top:1rem;max-height:320px;"></pre>
         </div>
