@@ -23,7 +23,7 @@ from pit.nih_reporter import NIHReporterRequestError
 from pit.climatiq import ClimatiqResponse
 from pit.climarket import CLIMarketResponse
 from pit.pubmed import PubMedResponse
-from pit.research import ResearchExecutionError, ResearchService
+from pit.research import ResearchExecutionError, ResearchService, _crossref_publication_date
 from pit.scoring import ScoringService
 from pit.reports import ReportGenerator
 from pit.semanticscholar import SemanticScholarRequestError, SemanticScholarResponse
@@ -90,6 +90,27 @@ class SuccessfulCrossrefConnector:
                 }
             ],
         )
+
+
+class TestCrossrefPublicationDate(unittest.TestCase):
+    def test_returns_none_when_year_is_null(self) -> None:
+        work = {"issued": {"date-parts": [[None]]}}
+        self.assertIsNone(_crossref_publication_date(work))
+
+    def test_falls_back_to_next_key_when_year_is_null(self) -> None:
+        work = {
+            "published-online": {"date-parts": [[None]]},
+            "issued": {"date-parts": [[2023, 6]]},
+        }
+        self.assertEqual(_crossref_publication_date(work), "2023-06-01")
+
+    def test_defaults_missing_month_and_day_when_null(self) -> None:
+        work = {"issued": {"date-parts": [[2022, None, None]]}}
+        self.assertEqual(_crossref_publication_date(work), "2022-01-01")
+
+    def test_returns_full_date_when_complete(self) -> None:
+        work = {"published-print": {"date-parts": [[2021, 3, 15]]}}
+        self.assertEqual(_crossref_publication_date(work), "2021-03-15")
 
 
 class SuccessfulPubMedConnector:

@@ -67,11 +67,14 @@ def _crossref_publication_date(work: dict[str, Any]) -> str | None:
         if not isinstance(date_parts, list) or not date_parts or not isinstance(date_parts[0], list):
             continue
         values = date_parts[0]
-        if not values:
+        if not values or values[0] is None:
             continue
-        year = int(values[0])
-        month = int(values[1]) if len(values) > 1 else 1
-        day = int(values[2]) if len(values) > 2 else 1
+        try:
+            year = int(values[0])
+            month = int(values[1]) if len(values) > 1 and values[1] is not None else 1
+            day = int(values[2]) if len(values) > 2 and values[2] is not None else 1
+        except (TypeError, ValueError):
+            continue
         return f"{year:04d}-{month:02d}-{day:02d}"
     return None
 
