@@ -16,6 +16,30 @@ const apiBaseEl = document.getElementById("api-base");
 const jsonToggle = document.getElementById("json-toggle");
 const jsonRaw = document.getElementById("json-raw");
 
+const COMPLEMENTARY_KEYS = {
+  regulatory_aggregation: {
+    title: "Regulación",
+    detail: (data) => {
+      const total = data?.total_records;
+      return total != null ? `${total} registros (OpenFDA, EUR-Lex, FoodData)` : "Sin datos regulatorios";
+    },
+  },
+  climatiq_aggregation: {
+    title: "Sostenibilidad",
+    detail: (data) => {
+      const count = data?.activity_count;
+      return count != null ? `${count} actividades de huella (Climatiq)` : "Sin datos de carbono";
+    },
+  },
+  techscout_aggregation: {
+    title: "I+D y proyectos",
+    detail: (data) => {
+      const total = data?.total_projects;
+      return total != null ? `${total} proyectos (CORDIS, NIH, NSF)` : "Sin proyectos de I+D";
+    },
+  },
+};
+
 if (apiBaseEl) apiBaseEl.textContent = getApiBase();
 
 function setStatus(kind, label) {
@@ -54,11 +78,34 @@ function renderDimensions(dimensions = {}) {
   });
 }
 
+function renderComplementary(evidenceSummary = {}) {
+  const grid = document.getElementById("complementary-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const entries = Object.entries(COMPLEMENTARY_KEYS)
+    .map(([key, meta]) => [key, meta, evidenceSummary[key]])
+    .filter(([, , data]) => data != null);
+
+  if (!entries.length) {
+    grid.innerHTML =
+      '<p style="color:var(--text-secondary);font-size:0.85rem;margin:0;">No hay agregaciones complementarias en este run (conectores opcionales pueden no haber corrido).</p>';
+    return;
+  }
+
+  entries.forEach(([key, meta, data]) => {
+    const card = document.createElement("div");
+    card.className = "complementary-card";
+    card.innerHTML = `<strong>${meta.title}</strong><p>${meta.detail(data)}</p>`;
+    grid.appendChild(card);
+  });
+}
+
 function renderEvidence(evidenceSummary = {}) {
   const grid = document.getElementById("evidence-grid");
   if (!grid) return;
   grid.innerHTML = "";
-  const entries = Object.entries(evidenceSummary);
+  const entries = Object.entries(evidenceSummary).filter(([key]) => key !== "pipeline_warnings");
   if (!entries.length) {
     grid.innerHTML = '<p class="empty-state" style="padding:1rem;">Sin agregaciones de evidencia.</p>';
     return;
@@ -97,6 +144,7 @@ function renderReport(report) {
   if (pdfLink) pdfLink.href = reportPdfUrl(report.run_id);
 
   renderDimensions(score.dimensions || {});
+  renderComplementary(report.evidence_summary || {});
   renderEvidence(report.evidence_summary || {});
 
   const alerts = [
@@ -128,6 +176,15 @@ function prefillFromQuery() {
 }
 
 prefillFromQuery();
+
+document.querySelectorAll(".preset-btn").forEach((button) => {
+  button.addEventListener("click", () => {
+    const queryInput = document.getElementById("query");
+    const marketSelect = document.getElementById("target_market");
+    if (queryInput && button.dataset.query) queryInput.value = button.dataset.query;
+    if (marketSelect && button.dataset.market) marketSelect.value = button.dataset.market;
+  });
+});
 
 if (jsonToggle && jsonRaw) {
   jsonToggle.addEventListener("click", () => {

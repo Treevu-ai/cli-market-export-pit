@@ -27,7 +27,15 @@
         <form id="analyze-form">
           <div style="margin-bottom:1rem;">
             <label for="query">Producto / consulta</label>
-            <input id="query" name="query" required minlength="3" placeholder="organic blueberry" />
+            <input id="query" name="query" required minlength="3" placeholder="ej. arándano orgánico, palta hass, cacao alto flavanol" />
+            <div class="preset-row" id="query-presets">
+              <span>Rutas:</span>
+              <button class="preset-btn" type="button" data-query="arándano orgánico" data-market="US">Arándano → US</button>
+              <button class="preset-btn" type="button" data-query="palta hass" data-market="US">Palta → US</button>
+              <button class="preset-btn" type="button" data-query="cacao alto flavanol" data-market="US">Cacao → US</button>
+              <button class="preset-btn" type="button" data-query="quinua orgánica" data-market="EU">Quinua → EU</button>
+              <button class="preset-btn" type="button" data-query="mango kent" data-market="US">Mango → US</button>
+            </div>
           </div>
           <div style="margin-bottom:1rem;">
             <label for="target_market">Mercado (ISO)</label>
@@ -42,7 +50,7 @@
           </div>
           <div style="margin-bottom:1rem;">
             <label for="application">Aplicación</label>
-            <input id="application" name="application" value="functional foods and beverages" />
+            <input id="application" name="application" value="alimentos y bebidas funcionales" />
           </div>
           <div style="margin-bottom:1rem;">
             <label for="limit">Límite por fuente</label>
@@ -89,10 +97,14 @@
             </div>
           </div>
 
-          <h3 style="font-family:var(--font-display);font-size:1.1rem;">Dominios</h3>
+          <h3 style="font-family:var(--font-display);font-size:1.1rem;">Dominios en el score</h3>
           <div class="dimension-list" id="dimension-list"></div>
 
-          <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-top:1.5rem;">Evidencia</h3>
+          <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-top:1.5rem;">Evidencia complementaria</h3>
+          <p style="color:var(--text-secondary);font-size:0.85rem;margin:0 0 0.75rem;">Regulación, sostenibilidad e I+D — recolectados en el pipeline aunque no pesen en el score v1.0.</p>
+          <div class="complementary-grid" id="complementary-grid"></div>
+
+          <h3 style="font-family:var(--font-display);font-size:1.1rem;margin-top:1.5rem;">Detalle por fuente</h3>
           <div class="evidence-grid" id="evidence-grid"></div>
 
           <div id="alerts-box" class="hidden" style="margin-top:1rem;padding:1rem;border-radius:var(--radius-sm);background:#fff8d6;color:#7a6200;font-size:0.9rem;"></div>

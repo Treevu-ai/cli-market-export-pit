@@ -360,7 +360,7 @@ textarea {
     grid-template-columns: repeat(3, 1fr);
   }
   .category-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -375,6 +375,11 @@ textarea {
 }
 
 .risk-card:hover {
+  border-color: var(--green-primary);
+  background: var(--green-soft);
+}
+
+.category-card:hover {
   border-color: var(--green-primary);
   background: var(--green-soft);
 }
@@ -856,6 +861,64 @@ textarea:focus {
   height: 100%;
   background: linear-gradient(90deg, var(--green-dark), var(--green-primary));
   border-radius: inherit;
+}
+
+.dimension-row--complementary .dimension-bar span {
+  background: linear-gradient(90deg, #3d5a80, #6b8cae);
+}
+
+.complementary-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.complementary-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  background: var(--bg-page);
+}
+
+.complementary-card strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+}
+
+.complementary-card p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.preset-row span {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.preset-btn {
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.preset-btn:hover {
+  border-color: var(--green-primary);
+  color: var(--green-dark);
 }
 
 .evidence-grid {
