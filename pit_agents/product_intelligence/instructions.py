@@ -2,7 +2,7 @@
 Prompts estructurados para CLI Market Product Intelligence v2.
 
 Este archivo centraliza las instrucciones de cada actor para utilizarlas
-con OpenAI Agents SDK u otro framework de agentes.
+con la Messages API de Anthropic u otro framework de agentes.
 """
 
 COMMON_PROTOCOL = """

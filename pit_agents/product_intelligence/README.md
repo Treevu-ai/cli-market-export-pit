@@ -19,7 +19,7 @@ Desde la raíz del repo:
 pip install -e ".[agents]"
 ```
 
-Dependencias opcionales: `openai-agents`, `pydantic`, `python-dotenv`.
+Dependencias opcionales: `anthropic`, `pydantic`, `python-dotenv`.
 
 ## Modo 1 — Con PIT (recomendado)
 
@@ -34,7 +34,7 @@ python -m uvicorn pit.api:app --reload
 
 ```powershell
 $env:PYTHONPATH = "src;."
-$env:OPENAI_API_KEY = "..."
+$env:ANTHROPIC_API_KEY = "..."
 python -m pit_agents.product_intelligence `
   --product "Snack proteico de quinua" `
   --market "Perú" `
@@ -88,7 +88,7 @@ El adaptador `pit_context.py` incluye `pit_recommendation` y `pit_opportunity_sc
 
 | Variable | Uso |
 |----------|-----|
-| `OPENAI_API_KEY` | Requerida para el runner |
+| `ANTHROPIC_API_KEY` | Requerida para el runner |
 | `PIT_API_URL` | Base URL PIT (default `http://127.0.0.1:8000`) |
 | `PIT_API_KEY` | Header `X-API-Key` si la API está protegida |
 | `CLI_MARKET_CONTEXT_FILE` | Snapshot mercado (modo legacy) |

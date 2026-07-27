@@ -1,4 +1,4 @@
-"""OpenAI Agents SDK runner for CLI Market Product Intelligence."""
+"""Anthropic Messages API runner for CLI Market Product Intelligence."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,11 @@ from .instructions import (
     REGULATORY_INSTRUCTIONS,
     SCIENTIFIC_INSTRUCTIONS,
 )
+
+MODEL = "claude-opus-5"
+# Mirrors the old openai-agents Runner.run(..., max_turns=30) ceiling, applied
+# per tool-use loop (each sub-agent's own loop, and the orchestrator's loop).
+MAX_TURNS = 30
 
 _context_bundle: PITContextBundle | None = None
 
@@ -92,59 +97,189 @@ def _snapshot_payload(domain: str) -> dict[str, Any]:
     return _load_json_file(env_name)
 
 
-def _require_agents_sdk():
+def _require_anthropic_sdk():
     try:
-        from agents import Agent, Runner, function_tool
+        import anthropic
     except ImportError as exc:
         raise SystemExit(
-            "Missing optional dependency openai-agents. Install with: pip install -e \".[agents]\""
+            "Missing optional dependency anthropic. Install with: pip install -e \".[agents]\""
         ) from exc
-    return Agent, Runner, function_tool
+    return anthropic
 
 
-def build_agents():
-    Agent, Runner, function_tool = _require_agents_sdk()
+_client_singleton: Any = None
 
-    @function_tool
-    def load_cli_market_context() -> str:
-        """Carga datos de góndola, precios y competencia desde PIT o snapshot JSON."""
-        return json.dumps(_snapshot_payload("market"), ensure_ascii=False)
 
-    @function_tool
-    def load_scientific_context() -> str:
-        """Carga evidencia científica y patentaria desde PIT o snapshot JSON."""
-        return json.dumps(_snapshot_payload("scientific"), ensure_ascii=False)
+def _client() -> Any:
+    """Lazily construct the Anthropic client (reads ANTHROPIC_API_KEY from the env)."""
+    global _client_singleton
+    if _client_singleton is None:
+        anthropic_module = _require_anthropic_sdk()
+        _client_singleton = anthropic_module.Anthropic()
+    return _client_singleton
 
-    @function_tool
-    def load_regulatory_context() -> str:
-        """Carga requisitos regulatorios desde PIT o snapshot JSON."""
-        return json.dumps(_snapshot_payload("regulatory"), ensure_ascii=False)
 
-    brief_agent = Agent(name="CLI Brief Architect", instructions=BRIEF_INSTRUCTIONS)
-    scientific_agent = Agent(
-        name="Scientific Evidence Agent",
+def _final_text(response: Any) -> str:
+    for block in response.content:
+        if block.type == "text":
+            return block.text
+    return ""
+
+
+def _run_single_turn_agent(*, instructions: str, prompt: str) -> str:
+    response = _client().messages.create(
+        model=MODEL,
+        max_tokens=8000,
+        system=instructions,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return _final_text(response)
+
+
+def _run_context_agent(*, instructions: str, prompt: str, tool_name: str, domain: str) -> str:
+    """Mirrors the old single-tool sub-agent pattern: the model must call its
+    one context-loading tool before answering, so this runs a small tool-use
+    loop instead of a single call."""
+    tool_def = {
+        "name": tool_name,
+        "description": f"Carga el contexto de {domain} desde PIT o snapshot JSON.",
+        "input_schema": {"type": "object", "properties": {}},
+    }
+    messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+    response = _client().messages.create(
+        model=MODEL, max_tokens=8000, system=instructions, tools=[tool_def], messages=messages,
+    )
+    turns = 0
+    while response.stop_reason == "tool_use" and turns < MAX_TURNS:
+        turns += 1
+        messages.append({"role": "assistant", "content": response.content})
+        tool_results = []
+        for block in response.content:
+            if block.type == "tool_use" and block.name == tool_name:
+                result = json.dumps(_snapshot_payload(domain), ensure_ascii=False)
+                tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": result})
+        messages.append({"role": "user", "content": tool_results})
+        response = _client().messages.create(
+            model=MODEL, max_tokens=8000, system=instructions, tools=[tool_def], messages=messages,
+        )
+    if response.stop_reason == "tool_use":
+        raise RuntimeError(f"Sub-agent '{tool_name}' exceeded max turns ({MAX_TURNS}) without finishing")
+    return _final_text(response)
+
+
+def _run_brief_agent(task: str) -> str:
+    return _run_single_turn_agent(instructions=BRIEF_INSTRUCTIONS, prompt=task)
+
+
+def _run_scientific_agent(task: str) -> str:
+    return _run_context_agent(
         instructions=SCIENTIFIC_INSTRUCTIONS + "\nDebes usar load_scientific_context antes de emitir hallazgos.",
-        tools=[load_scientific_context],
+        prompt=task,
+        tool_name="load_scientific_context",
+        domain="scientific",
     )
-    market_agent = Agent(
-        name="CLI Market Intelligence Agent",
-        instructions=MARKET_INSTRUCTIONS + "\nDebes usar load_cli_market_context antes de emitir cifras o comparaciones.",
-        tools=[load_cli_market_context],
-    )
-    regulatory_agent = Agent(
-        name="Regulatory Readiness Agent",
-        instructions=REGULATORY_INSTRUCTIONS + "\nDebes usar load_regulatory_context antes de emitir hallazgos.",
-        tools=[load_regulatory_context],
-    )
-    product_design_agent = Agent(name="Competitive Product Designer", instructions=DESIGN_INSTRUCTIONS)
-    economics_agent = Agent(name="Commercial Feasibility Agent", instructions=COMMERCIAL_INSTRUCTIONS)
-    critic_agent = Agent(name="Red Team Opportunity Critic", instructions=RED_TEAM_INSTRUCTIONS)
-    report_agent = Agent(name="Opportunity Dossier Writer", instructions=DOSSIER_INSTRUCTIONS)
 
-    orchestrator_agent = Agent(
-        name="CLI Product Intelligence Orchestrator",
-        instructions=ORCHESTRATOR_INSTRUCTIONS
-        + """
+
+def _run_market_agent(task: str) -> str:
+    return _run_context_agent(
+        instructions=MARKET_INSTRUCTIONS + "\nDebes usar load_cli_market_context antes de emitir cifras o comparaciones.",
+        prompt=task,
+        tool_name="load_cli_market_context",
+        domain="market",
+    )
+
+
+def _run_regulatory_agent(task: str) -> str:
+    return _run_context_agent(
+        instructions=REGULATORY_INSTRUCTIONS + "\nDebes usar load_regulatory_context antes de emitir hallazgos.",
+        prompt=task,
+        tool_name="load_regulatory_context",
+        domain="regulatory",
+    )
+
+
+def _run_product_design_agent(task: str) -> str:
+    return _run_single_turn_agent(instructions=DESIGN_INSTRUCTIONS, prompt=task)
+
+
+def _run_commercial_agent(task: str) -> str:
+    return _run_single_turn_agent(instructions=COMMERCIAL_INSTRUCTIONS, prompt=task)
+
+
+def _run_red_team_agent(task: str) -> str:
+    return _run_single_turn_agent(instructions=RED_TEAM_INSTRUCTIONS, prompt=task)
+
+
+def _run_dossier_agent(task: str) -> str:
+    return _run_single_turn_agent(instructions=DOSSIER_INSTRUCTIONS, prompt=task)
+
+
+_DELEGATE_TOOL_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "task": {
+            "type": "string",
+            "description": "Instrucción detallada para el especialista, con todo el contexto necesario.",
+        }
+    },
+    "required": ["task"],
+}
+
+_DELEGATE_TOOLS: list[dict[str, Any]] = [
+    {
+        "name": "build_product_brief",
+        "description": "Convierte la idea inicial en un brief y define hipótesis críticas.",
+        "input_schema": _DELEGATE_TOOL_INPUT_SCHEMA,
+    },
+    {
+        "name": "scientific_evidence",
+        "description": "Evalúa evidencia científica, tecnológica y patentaria.",
+        "input_schema": _DELEGATE_TOOL_INPUT_SCHEMA,
+    },
+    {
+        "name": "market_intelligence",
+        "description": "Analiza góndola, competencia, precios, formatos y espacios de mercado.",
+        "input_schema": _DELEGATE_TOOL_INPUT_SCHEMA,
+    },
+    {
+        "name": "regulatory_readiness",
+        "description": "Evalúa regulación, etiquetado, claims y requisitos del mercado.",
+        "input_schema": _DELEGATE_TOOL_INPUT_SCHEMA,
+    },
+    {
+        "name": "competitive_product_design",
+        "description": "Diseña conceptos de producto basados en la evidencia consolidada.",
+        "input_schema": _DELEGATE_TOOL_INPUT_SCHEMA,
+    },
+    {
+        "name": "commercial_feasibility",
+        "description": "Evalúa posicionamiento, canal, margen preliminar y pruebas comerciales.",
+        "input_schema": _DELEGATE_TOOL_INPUT_SCHEMA,
+    },
+    {
+        "name": "red_team_review",
+        "description": "Cuestiona la oportunidad y recomienda GO, CONDITIONAL GO, PIVOT o NO-GO.",
+        "input_schema": _DELEGATE_TOOL_INPUT_SCHEMA,
+    },
+    {
+        "name": "write_opportunity_dossier",
+        "description": "Redacta la Ficha de Oportunidad de Producto para decisión ejecutiva.",
+        "input_schema": _DELEGATE_TOOL_INPUT_SCHEMA,
+    },
+]
+
+_DELEGATE_HANDLERS: dict[str, Callable[[str], str]] = {
+    "build_product_brief": _run_brief_agent,
+    "scientific_evidence": _run_scientific_agent,
+    "market_intelligence": _run_market_agent,
+    "regulatory_readiness": _run_regulatory_agent,
+    "competitive_product_design": _run_product_design_agent,
+    "commercial_feasibility": _run_commercial_agent,
+    "red_team_review": _run_red_team_agent,
+    "write_opportunity_dossier": _run_dossier_agent,
+}
+
+_ORCHESTRATOR_SEQUENCE = """
 
 Secuencia obligatoria:
 1. build_product_brief
@@ -156,47 +291,50 @@ Secuencia obligatoria:
 
 No reemplaces a los especialistas con tu propio conocimiento.
 No inventes datos para completar vacíos.
-""",
-        tools=[
-            brief_agent.as_tool(
-                tool_name="build_product_brief",
-                tool_description="Convierte la idea inicial en un brief y define hipótesis críticas.",
-            ),
-            scientific_agent.as_tool(
-                tool_name="scientific_evidence",
-                tool_description="Evalúa evidencia científica, tecnológica y patentaria.",
-            ),
-            market_agent.as_tool(
-                tool_name="market_intelligence",
-                tool_description="Analiza góndola, competencia, precios, formatos y espacios de mercado.",
-            ),
-            regulatory_agent.as_tool(
-                tool_name="regulatory_readiness",
-                tool_description="Evalúa regulación, etiquetado, claims y requisitos del mercado.",
-            ),
-            product_design_agent.as_tool(
-                tool_name="competitive_product_design",
-                tool_description="Diseña conceptos de producto basados en la evidencia consolidada.",
-            ),
-            economics_agent.as_tool(
-                tool_name="commercial_feasibility",
-                tool_description="Evalúa posicionamiento, canal, margen preliminar y pruebas comerciales.",
-            ),
-            critic_agent.as_tool(
-                tool_name="red_team_review",
-                tool_description="Cuestiona la oportunidad y recomienda GO, CONDITIONAL GO, PIVOT o NO-GO.",
-            ),
-            report_agent.as_tool(
-                tool_name="write_opportunity_dossier",
-                tool_description="Redacta la Ficha de Oportunidad de Producto para decisión ejecutiva.",
-            ),
-        ],
+"""
+
+
+def _run_orchestrator(prompt: str) -> str:
+    """Agents-as-tools orchestration: each delegate tool call runs a nested
+    Messages API call (via _DELEGATE_HANDLERS) and its text result is returned
+    as the tool_result, mirroring the old Agent.as_tool() pattern."""
+    system = ORCHESTRATOR_INSTRUCTIONS + _ORCHESTRATOR_SEQUENCE
+    messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+    response = _client().messages.create(
+        model=MODEL, max_tokens=16000, system=system, tools=_DELEGATE_TOOLS, messages=messages,
     )
-    return orchestrator_agent, Runner
+    turns = 0
+    while response.stop_reason == "tool_use" and turns < MAX_TURNS:
+        turns += 1
+        messages.append({"role": "assistant", "content": response.content})
+        tool_results = []
+        for block in response.content:
+            if block.type != "tool_use":
+                continue
+            handler = _DELEGATE_HANDLERS.get(block.name)
+            if handler is None:
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": f"Unknown tool: {block.name}",
+                        "is_error": True,
+                    }
+                )
+                continue
+            task = block.input.get("task", "") if isinstance(block.input, dict) else ""
+            result_text = handler(task)
+            tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": result_text})
+        messages.append({"role": "user", "content": tool_results})
+        response = _client().messages.create(
+            model=MODEL, max_tokens=16000, system=system, tools=_DELEGATE_TOOLS, messages=messages,
+        )
+    if response.stop_reason == "tool_use":
+        raise RuntimeError(f"Orchestrator exceeded max turns ({MAX_TURNS}) without finishing")
+    return _final_text(response)
 
 
 async def run_analysis(brief: ProductBrief) -> str:
-    orchestrator_agent, Runner = build_agents()
     prompt = f"""
 Analiza la siguiente iniciativa:
 
@@ -205,8 +343,7 @@ Analiza la siguiente iniciativa:
 Usa la secuencia completa de subagentes. No omitas ciencia, mercado,
 regulación, diseño, viabilidad comercial, red team ni síntesis final.
 """
-    result = await Runner.run(orchestrator_agent, prompt, max_turns=30)
-    return result.final_output
+    return await asyncio.to_thread(_run_orchestrator, prompt)
 
 
 def resolve_context_bundle(args: argparse.Namespace, brief: ProductBrief) -> PITContextBundle | None:

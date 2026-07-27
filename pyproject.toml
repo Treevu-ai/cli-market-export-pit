@@ -23,7 +23,7 @@ dev = [
     "ruff>=0.5",
 ]
 agents = [
-    "openai-agents",
+    "anthropic>=0.40",
     "pydantic>=2.7",
     "python-dotenv>=1.0",
 ]

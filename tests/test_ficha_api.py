@@ -43,7 +43,7 @@ class AgentsStatusTests(FichaApiTests):
         body = response.json()
         self.assertIn("data", body)
         self.assertIn("ficha_available", body["data"])
-        self.assertIn("openai_configured", body["data"])
+        self.assertIn("anthropic_configured", body["data"])
 
 
 class FichaEndpointTests(FichaApiTests):

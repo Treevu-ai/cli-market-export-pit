@@ -112,7 +112,7 @@ Capa multiagente opcional que genera una **Ficha de Oportunidad** (`GO` / `CONDI
 ```powershell
 pip install -e ".[agents]"
 $env:PYTHONPATH = "src;."
-$env:OPENAI_API_KEY = "..."
+$env:ANTHROPIC_API_KEY = "..."
 python -m pit_agents.product_intelligence `
   --product "Snack proteico de quinua" `
   --market "Perú" `

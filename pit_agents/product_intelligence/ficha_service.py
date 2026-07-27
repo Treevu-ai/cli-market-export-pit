@@ -10,10 +10,10 @@ from .runner import ProductBrief, _infer_market_code, run_analysis, set_context_
 
 
 def agents_dependencies_ready() -> tuple[bool, str | None]:
-    if not os.getenv("OPENAI_API_KEY"):
-        return False, "OPENAI_API_KEY no esta configurada en el servidor."
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return False, "ANTHROPIC_API_KEY no esta configurada en el servidor."
     try:
-        from agents import Agent  # noqa: F401
+        import anthropic  # noqa: F401
     except ImportError:
         return (
             False,
@@ -27,7 +27,7 @@ def agents_status() -> dict[str, Any]:
     return {
         "ficha_available": ready,
         "reason": reason,
-        "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
+        "anthropic_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
     }
 
 

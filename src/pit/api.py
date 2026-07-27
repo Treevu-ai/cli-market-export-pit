@@ -356,7 +356,7 @@ def create_app(
                 "data": {
                     "ficha_available": False,
                     "reason": 'Modulo de agentes no encontrado. Instala: pip install -e ".[agents]"',
-                    "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
+                    "anthropic_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
                 }
             }
         return {"data": _agents_status()}
