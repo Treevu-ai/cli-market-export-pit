@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from agents.product_intelligence.adapters.pit_context import (  # noqa: E402
+from pit_agents.product_intelligence.adapters.pit_context import (  # noqa: E402
     PITClient,
     build_context_bundle,
 )
@@ -58,7 +58,7 @@ class PITContextAdapterTests(unittest.TestCase):
         self.assertIn("climarket_aggregation", " ".join(bundle.market.get("vacios_criticos", [])))
 
     def test_infer_market_code(self) -> None:
-        from agents.product_intelligence.runner import _infer_market_code
+        from pit_agents.product_intelligence.runner import _infer_market_code
 
         self.assertEqual(_infer_market_code("PE"), "PE")
         self.assertEqual(_infer_market_code("Perú"), "PE")

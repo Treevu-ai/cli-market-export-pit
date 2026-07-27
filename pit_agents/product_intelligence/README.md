@@ -35,7 +35,7 @@ python -m uvicorn pit.api:app --reload
 ```powershell
 $env:PYTHONPATH = "src;."
 $env:OPENAI_API_KEY = "..."
-python -m agents.product_intelligence `
+python -m pit_agents.product_intelligence `
   --product "Snack proteico de quinua" `
   --market "Perú" `
   --segment "jóvenes profesionales" `
@@ -56,7 +56,7 @@ Flujo:
 ## Modo 2 — Reutilizar un run PIT existente
 
 ```powershell
-python -m agents.product_intelligence `
+python -m pit_agents.product_intelligence `
   --product "Arándano orgánico" `
   --market "US" `
   --segment "retail premium" `
@@ -72,7 +72,7 @@ Sin PIT en vivo, usando archivos estáticos:
 $env:CLI_MARKET_CONTEXT_FILE = "./data/cli_market_snapshot.json"
 $env:SCIENTIFIC_CONTEXT_FILE = "./data/scientific_snapshot.json"
 $env:REGULATORY_CONTEXT_FILE = "./data/regulatory_snapshot.json"
-python -m agents.product_intelligence --skip-pit --product "..." --market "..." --segment "..."
+python -m pit_agents.product_intelligence --skip-pit --product "..." --market "..." --segment "..."
 ```
 
 ## Relación PIT ↔ Agentes

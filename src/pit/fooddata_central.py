@@ -60,14 +60,19 @@ class FoodDataCentralConnector:
                 raw_content=b'{"foods":[]}',
                 works=[],
             )
+        # `params`/`safe_request_url` are what get persisted and returned to
+        # callers (stored evidence, API responses) — they must never carry the
+        # api_key. The real HTTP request is built separately with the key added.
         params: dict[str, str] = {
             "query": query,
             "pageSize": str(limit),
             "format": "json",
         }
+        safe_request_url = f"{self.base_url}?{urlencode(params)}"
+        authenticated_params = dict(params)
         if self.api_key:
-            params["api_key"] = self.api_key
-        request_url = f"{self.base_url}?{urlencode(params)}"
+            authenticated_params["api_key"] = self.api_key
+        request_url = f"{self.base_url}?{urlencode(authenticated_params)}"
         request = Request(
             request_url,
             headers={"User-Agent": "PIT/0.1 research-service"},
@@ -82,13 +87,13 @@ class FoodDataCentralConnector:
                 f"FoodData Central returned HTTP {error.code}",
                 http_status=error.code,
                 raw_content=raw_content,
-                request_url=request_url,
+                request_url=safe_request_url,
                 request_params=params,
             ) from error
         except URLError as error:
             raise FoodDataCentralRequestError(
                 f"FoodData Central network error: {error.reason}",
-                request_url=request_url,
+                request_url=safe_request_url,
                 request_params=params,
             ) from error
 
@@ -100,7 +105,7 @@ class FoodDataCentralConnector:
                 "FoodData Central response did not contain foods",
                 http_status=http_status,
                 raw_content=raw_content,
-                request_url=request_url,
+                request_url=safe_request_url,
                 request_params=params,
             ) from error
 
@@ -114,7 +119,7 @@ class FoodDataCentralConnector:
             })
 
         return FoodDataCentralResponse(
-            request_url=request_url,
+            request_url=safe_request_url,
             request_params=params,
             http_status=http_status,
             raw_content=raw_content,

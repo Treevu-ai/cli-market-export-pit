@@ -16,9 +16,10 @@ from pit.gdelt import GDELTResponse
 from pit.nih_reporter import NIHReporterResponse
 from pit.nsf_awards import NSFAwardsResponse
 from pit.openalex import OpenAlexRequestError, OpenAlexResponse
-from pit.openfda import OpenFDAResponse
+from pit.openfda import OpenFDARequestError, OpenFDAResponse
 from pit.efsa_eurlex import EFSALexResponse
 from pit.fooddata_central import FoodDataCentralResponse
+from pit.nih_reporter import NIHReporterRequestError
 from pit.climatiq import ClimatiqResponse
 from pit.climarket import CLIMarketResponse
 from pit.pubmed import PubMedResponse
@@ -294,6 +295,19 @@ class SuccessfulNIHConnector:
         )
 
 
+class FailingNIHConnector:
+    source = "nih_reporter"
+    license_name = "NIH RePORTER; public data"
+    base_url = "https://api.reporter.nih.gov/v2/projects/search"
+
+    def search(self, *, query: str, from_publication_date: str, limit: int) -> NIHReporterResponse:
+        raise NIHReporterRequestError(
+            "NIH Reporter returned HTTP 500",
+            http_status=500,
+            raw_content=b'{"error":"internal"}',
+        )
+
+
 class SuccessfulNSFConnector:
     source = "nsf_awards"
     license_name = "NSF Open Data; public domain"
@@ -365,6 +379,19 @@ class SuccessfulOpenFDAConnector:
                     "source": "openfda",
                 },
             ],
+        )
+
+
+class FailingOpenFDAConnector:
+    source = "openfda"
+    license_name = "OpenFDA; public data"
+    base_url = "https://api.fda.gov/food/enforcement.json"
+
+    def search(self, *, query: str, from_publication_date: str, limit: int, target_market: str | None = None) -> OpenFDAResponse:
+        raise OpenFDARequestError(
+            "OpenFDA returned HTTP 500",
+            http_status=500,
+            raw_content=b'{"error":"internal"}',
         )
 
 
@@ -856,6 +883,42 @@ class ResearchServiceTests(unittest.TestCase):
             self.assertIn("techscout_aggregation", summaries)
             self.assertEqual(summaries["techscout_aggregation"]["total_projects"], 3)
 
+    def test_techscout_summary_is_saved_even_when_one_connector_fails(self) -> None:
+        """Regression: previously the aggregated summary was only saved when ALL
+        techscout connectors succeeded, silently discarding evidence already
+        stored by the ones that did succeed."""
+        with tempfile.TemporaryDirectory() as directory:
+            store, service = self._service(
+                directory,
+                SuccessfulConnector(),
+                cordis_connector=SuccessfulCORDISConnector(),
+                nih_connector=FailingNIHConnector(),
+                nsf_connector=SuccessfulNSFConnector(),
+            )
+            initial = service.run_science_research(
+                query="cocoa",
+                target_market="US",
+                application="functional foods and beverages",
+                cutoff_at="2026-07-24T00:00:00+00:00",
+                from_publication_date="2021-01-01",
+                limit=10,
+            )
+
+            with self.assertRaises(ResearchExecutionError):
+                service.enrich_with_techscout(run_id=initial["id"], limit=10)
+
+            detail = store.get_run_detail(initial["id"])
+            tech_evidence = [e for e in detail["evidence"] if e["domain"] == "technology_scout"]
+            self.assertEqual({e["source"] for e in tech_evidence}, {"cordis", "nsf_awards"})
+
+            summaries = detail.get("summaries", {})
+            self.assertIn("techscout_aggregation", summaries)
+            self.assertEqual(summaries["techscout_aggregation"]["total_projects"], 2)
+            self.assertEqual(
+                {s["source"] for s in summaries["techscout_aggregation"]["sources"]},
+                {"cordis", "nsf_awards"},
+            )
+
     def test_regulatory_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store, service = self._service(
@@ -881,6 +944,42 @@ class ResearchServiceTests(unittest.TestCase):
             summaries = enriched.get("summaries", {})
             self.assertIn("regulatory_aggregation", summaries)
             self.assertEqual(summaries["regulatory_aggregation"]["total_records"], 3)
+
+    def test_regulatory_summary_is_saved_even_when_one_connector_fails(self) -> None:
+        """Regression: previously the aggregated summary was only saved when ALL
+        regulatory connectors succeeded, silently discarding evidence already
+        stored by the ones that did succeed."""
+        with tempfile.TemporaryDirectory() as directory:
+            store, service = self._service(
+                directory,
+                SuccessfulConnector(),
+                openfda_connector=FailingOpenFDAConnector(),
+                efsa_connector=SuccessfulEFSALexConnector(),
+                fooddata_connector=SuccessfulFoodDataCentralConnector(),
+            )
+            initial = service.run_science_research(
+                query="cocoa",
+                target_market="US",
+                application="functional foods and beverages",
+                cutoff_at="2026-07-24T00:00:00+00:00",
+                from_publication_date="2021-01-01",
+                limit=10,
+            )
+
+            with self.assertRaises(ResearchExecutionError):
+                service.enrich_with_regulatory(run_id=initial["id"], limit=10)
+
+            detail = store.get_run_detail(initial["id"])
+            reg_evidence = [e for e in detail["evidence"] if e["domain"] == "regulatory"]
+            self.assertEqual({e["source"] for e in reg_evidence}, {"efsa_eurlex", "fooddata_central"})
+
+            summaries = detail.get("summaries", {})
+            self.assertIn("regulatory_aggregation", summaries)
+            self.assertEqual(summaries["regulatory_aggregation"]["total_records"], 2)
+            self.assertEqual(
+                {s["source"] for s in summaries["regulatory_aggregation"]["sources"]},
+                {"efsa_eurlex", "fooddata_central"},
+            )
 
     def test_sustainability_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

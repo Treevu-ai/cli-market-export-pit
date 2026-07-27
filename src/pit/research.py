@@ -190,7 +190,7 @@ class ResearchService:
                 raw_content=response.raw_content,
             )
             for work in response.works:
-                self._store_work(run_id=run_id, request_id=request_id, work=work)
+                self._store_work(run_id=run_id, request_id=request_id, work=work, source=self.science_connector.source)
             self._save_openalex_summary(run_id=run_id, works=response.works)
             self.store.complete_run(run_id)
         except OpenAlexRequestError as error:
@@ -267,7 +267,7 @@ class ResearchService:
             raise ResearchExecutionError(run_id, str(error)) from error
         return self.store.get_run_detail(run_id)
 
-    def _store_work(self, *, run_id: str, request_id: str, work: dict[str, Any]) -> None:
+    def _store_work(self, *, run_id: str, request_id: str, work: dict[str, Any], source: str) -> None:
         openalex_id = str(work.get("id") or "").strip()
         doi = str(work.get("doi") or "").strip()
         title = str(work.get("title") or "").strip()
@@ -285,7 +285,7 @@ class ResearchService:
         self.store.add_evidence(
             research_run_id=run_id,
             source_request_id=request_id,
-            source=self.science_connector.source,
+            source=source,
             domain="science",
             external_id=openalex_id,
             title=title,
@@ -1061,9 +1061,9 @@ class ResearchService:
                     raw_content=error.raw_content,
                 )
                 failures.append(f"{connector.source}: {error}")
+        self._save_regulatory_summary(run_id=run_id)
         if failures:
             raise ResearchExecutionError(run_id, "; ".join(failures))
-        self._save_regulatory_summary(run_id=run_id)
         return self.store.get_run_detail(run_id)
 
     def _store_regulatory_work(self, *, run_id: str, request_id: str, work: dict[str, Any], source: str) -> None:
@@ -1093,17 +1093,8 @@ class ResearchService:
         )
 
     def _save_regulatory_summary(self, *, run_id: str) -> None:
-        with self.store._transaction() as db:
-            rows = db.execute(
-                "SELECT source, COUNT(*) as count FROM evidence_records WHERE research_run_id=? AND domain='regulatory' GROUP BY source",
-                (run_id,),
-            ).fetchall()
-        sources = []
-        for row in rows:
-            sources.append({
-                "source": row["source"],
-                "record_count": row["count"],
-            })
+        counts = self.store.count_evidence_by_source(run_id, "regulatory")
+        sources = [{"source": row["source"], "record_count": row["count"]} for row in counts]
         self.store.save_domain_summary(
             research_run_id=run_id,
             domain="regulatory",
@@ -1266,9 +1257,9 @@ class ResearchService:
                     raw_content=error.raw_content,
                 )
                 failures.append(f"{connector.source}: {error}")
+        self._save_techscout_summary(run_id=run_id)
         if failures:
             raise ResearchExecutionError(run_id, "; ".join(failures))
-        self._save_techscout_summary(run_id=run_id)
         return self.store.get_run_detail(run_id)
 
     def _store_techscout_work(self, *, run_id: str, request_id: str, work: dict[str, Any]) -> None:
@@ -1300,17 +1291,8 @@ class ResearchService:
         )
 
     def _save_techscout_summary(self, *, run_id: str) -> None:
-        with self.store._transaction() as db:
-            rows = db.execute(
-                "SELECT source, COUNT(*) as count FROM evidence_records WHERE research_run_id=? AND domain='technology_scout' GROUP BY source",
-                (run_id,),
-            ).fetchall()
-        sources = []
-        for row in rows:
-            sources.append({
-                "source": row["source"],
-                "project_count": row["count"],
-            })
+        counts = self.store.count_evidence_by_source(run_id, "technology_scout")
+        sources = [{"source": row["source"], "project_count": row["count"]} for row in counts]
         self.store.save_domain_summary(
             research_run_id=run_id,
             domain="technology_scout",

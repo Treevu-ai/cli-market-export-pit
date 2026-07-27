@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -188,7 +189,7 @@ class APIKeyMiddleware:
         if api_key:
             headers = {key.decode().lower(): value.decode() for key, value in scope.get("headers", [])}
             request_api_key = headers.get("x-api-key")
-            if request_api_key != api_key:
+            if request_api_key is None or not secrets.compare_digest(request_api_key, api_key):
                 from starlette.responses import JSONResponse
                 response = JSONResponse({"detail": "Invalid API key"}, status_code=401)
                 await response(scope, receive, send)
@@ -349,7 +350,7 @@ def create_app(
     @app.get("/v1/agents/status")
     def get_agents_status() -> dict[str, Any]:
         try:
-            from agents.product_intelligence.ficha_service import agents_status as _agents_status
+            from pit_agents.product_intelligence.ficha_service import agents_status as _agents_status
         except ImportError:
             return {
                 "data": {
@@ -368,7 +369,7 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
 
         try:
-            from agents.product_intelligence.ficha_service import (
+            from pit_agents.product_intelligence.ficha_service import (
                 agents_dependencies_ready,
                 generate_dossier_for_run,
             )

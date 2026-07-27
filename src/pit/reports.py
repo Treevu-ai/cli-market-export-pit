@@ -93,6 +93,7 @@ class ReportGenerator:
         domain_scores: list[dict[str, Any]] | None = None,
     ) -> bytes:
         from fpdf import FPDF
+        from fpdf.enums import XPos, YPos
 
         summaries = run.get("summaries", {})
         dimension_map = {
@@ -112,21 +113,22 @@ class ReportGenerator:
 
         pdf.set_font("Helvetica", "B", 11)
         pdf.set_text_color(10, 107, 47)
-        pdf.cell(0, 6, pdf_safe_text("CLI Market Export Intelligence"), ln=True)
+        pdf.cell(0, 6, pdf_safe_text("CLI Market Export Intelligence"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 9, pdf_safe_text("Resumen ejecutivo exportador (PIT)"), ln=True)
+        pdf.cell(0, 9, pdf_safe_text("Resumen ejecutivo exportador (PIT)"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         pdf.set_font("Helvetica", "", 10)
-        pdf.cell(0, 5, pdf_safe_text(f"Producto: {run['query_original']}"), ln=True)
+        pdf.cell(0, 5, pdf_safe_text(f"Producto: {run['query_original']}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.cell(
             0,
             5,
             pdf_safe_text(f"Mercado destino: {run['target_market']}  |  Aplicacion: {run.get('application', '-')}") ,
-            ln=True,
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
         )
         generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        pdf.cell(0, 5, pdf_safe_text(f"Generado: {generated}  |  Run: {run['id']}"), ln=True)
+        pdf.cell(0, 5, pdf_safe_text(f"Generado: {generated}  |  Run: {run['id']}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(3)
 
         recommendation = RECOMMENDATION_LABELS.get(
@@ -137,29 +139,30 @@ class ReportGenerator:
         pdf.set_font("Helvetica", "B", 22)
         pdf.cell(60, 14, pdf_safe_text(f"{scores['opportunity_score']}"), border=1, align="C", fill=True)
         pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(0, 14, pdf_safe_text(f"  {recommendation}"), border=1, ln=True, fill=True)
+        pdf.cell(0, 14, pdf_safe_text(f"  {recommendation}"), border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
         pdf.set_font("Helvetica", "", 10)
         pdf.cell(
             0,
             6,
             pdf_safe_text(f"Cobertura global: {scores['coverage_factor']:.0%}  |  Version scoring: {scores['score_version']}"),
-            ln=True,
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
         )
         pdf.ln(4)
 
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 6, pdf_safe_text("Dominios en el score"), ln=True)
+        pdf.cell(0, 6, pdf_safe_text("Dominios en el score"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Helvetica", "B", 9)
         pdf.cell(42, 6, "Dominio", border=1)
         pdf.cell(22, 6, "Score", border=1, align="C")
         pdf.cell(22, 6, "Cobert.", border=1, align="C")
-        pdf.cell(22, 6, "Peso", border=1, align="C", ln=True)
+        pdf.cell(22, 6, "Peso", border=1, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Helvetica", "", 9)
         for domain, row in dimension_map.items():
             pdf.cell(42, 6, pdf_safe_text(domain), border=1)
             pdf.cell(22, 6, str(row.get("score", 0)), border=1, align="C")
             pdf.cell(22, 6, pdf_safe_text(f"{row.get('coverage', 0):.0%}"), border=1, align="C")
-            pdf.cell(22, 6, pdf_safe_text(f"{row.get('weight', 0):.0%}"), border=1, align="C", ln=True)
+            pdf.cell(22, 6, pdf_safe_text(f"{row.get('weight', 0):.0%}"), border=1, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         complementary = [
             _complementary_line(key, summaries[key])
@@ -170,7 +173,7 @@ class ReportGenerator:
             pdf.ln(3)
             pdf.set_x(pdf.l_margin)
             pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(0, 6, pdf_safe_text("Evidencia complementaria"), ln=True)
+            pdf.cell(0, 6, pdf_safe_text("Evidencia complementaria"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("Helvetica", "", 9)
             for line in complementary[:3]:
                 pdf.multi_cell(pdf.epw, 5, pdf_safe_text(f"- {line}"))
@@ -181,7 +184,7 @@ class ReportGenerator:
             pdf.ln(2)
             pdf.set_x(pdf.l_margin)
             pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(0, 6, pdf_safe_text("Hallazgos clave"), ln=True)
+            pdf.cell(0, 6, pdf_safe_text("Hallazgos clave"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("Helvetica", "", 9)
             for claim in opportunity_claims:
                 pdf.multi_cell(
@@ -194,7 +197,7 @@ class ReportGenerator:
             pdf.ln(2)
             pdf.set_x(pdf.l_margin)
             pdf.set_font("Helvetica", "B", 11)
-            pdf.cell(0, 6, pdf_safe_text("Mejoras sugeridas"), ln=True)
+            pdf.cell(0, 6, pdf_safe_text("Mejoras sugeridas"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("Helvetica", "", 9)
             for item in checklist[:5]:
                 pdf.multi_cell(
@@ -215,4 +218,4 @@ class ReportGenerator:
                 "Revise fuentes en el reporte JSON completo."
             ),
         )
-        return pdf.output()
+        return bytes(pdf.output())

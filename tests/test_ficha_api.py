@@ -50,7 +50,7 @@ class FichaEndpointTests(FichaApiTests):
     def test_ficha_returns_404_for_unknown_run(self) -> None:
         client, _ = self._client_with_run()
         with patch(
-            "agents.product_intelligence.ficha_service.agents_dependencies_ready",
+            "pit_agents.product_intelligence.ficha_service.agents_dependencies_ready",
             return_value=(True, None),
         ):
             response = client.post(
@@ -62,7 +62,7 @@ class FichaEndpointTests(FichaApiTests):
     def test_ficha_returns_503_when_agents_unavailable(self) -> None:
         client, run_id = self._client_with_run()
         with patch(
-            "agents.product_intelligence.ficha_service.agents_dependencies_ready",
+            "pit_agents.product_intelligence.ficha_service.agents_dependencies_ready",
             return_value=(False, "OPENAI_API_KEY no esta configurada en el servidor."),
         ):
             response = client.post(
@@ -83,10 +83,10 @@ class FichaEndpointTests(FichaApiTests):
             "stage": "concepto",
         }
         with patch(
-            "agents.product_intelligence.ficha_service.agents_dependencies_ready",
+            "pit_agents.product_intelligence.ficha_service.agents_dependencies_ready",
             return_value=(True, None),
         ), patch(
-            "agents.product_intelligence.ficha_service.generate_dossier_for_run",
+            "pit_agents.product_intelligence.ficha_service.generate_dossier_for_run",
             new=AsyncMock(return_value=mock_result),
         ):
             response = client.post(

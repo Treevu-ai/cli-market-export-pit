@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 try:
     import psycopg2  # noqa: F401
@@ -21,17 +22,54 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_SENSITIVE_PARAM_KEYS = {
+    "api_key",
+    "apikey",
+    "key",
+    "token",
+    "access_token",
+    "client_secret",
+    "secret",
+    "password",
+}
+_REDACTED = "***REDACTED***"
+
+
+def _redact_sensitive_params(request_params: dict[str, Any]) -> dict[str, Any]:
+    """Defense in depth: strip known-sensitive query params before persisting.
+
+    Connectors are expected to keep secrets out of request_url/request_params
+    entirely (they belong in headers), but this backstop protects stored
+    evidence and API responses even if a connector gets that wrong.
+    """
+    return {
+        key: (_REDACTED if key.lower() in _SENSITIVE_PARAM_KEYS else value)
+        for key, value in request_params.items()
+    }
+
+
+def _redact_sensitive_query_string(url: str) -> str:
+    for sensitive_key in _SENSITIVE_PARAM_KEYS:
+        url = re.sub(
+            rf"([?&]{re.escape(sensitive_key)}=)[^&]*",
+            rf"\g<1>{_REDACTED}",
+            url,
+            flags=re.IGNORECASE,
+        )
+    return url
+
+
 class ResearchStore:
     """Owns PIT metadata and content-addressed source responses."""
 
     def __init__(self, database_path: Path, raw_directory: Path, database_url: str | None = None) -> None:
-        self.database_url = database_url or os.getenv("DATABASE_URL", "")
+        self.database_url: str = database_url if database_url else os.getenv("DATABASE_URL", "")
         self.raw_directory = raw_directory
         if self.database_url.startswith("postgresql://"):
             if psycopg2 is None:
                 raise RuntimeError("psycopg2-binary is required for PostgreSQL. Install it with: pip install psycopg2-binary")
             self._backend = "postgresql"
-            self._conn = None
+            self._conn: Any = None
         else:
             self._backend = "sqlite"
             self.database_path = database_path
@@ -314,8 +352,10 @@ class ResearchStore:
         license_name: str,
     ) -> str:
         request_id = f"sr_{uuid.uuid4().hex}"
+        safe_request_url = _redact_sensitive_query_string(request_url)
+        safe_request_params = _redact_sensitive_params(request_params)
         with self._transaction() as db:
-            self._execute(db, 
+            self._execute(db,
                 """
                 INSERT INTO source_requests (
                     id, research_run_id, source, request_url, request_params, license, status
@@ -325,8 +365,8 @@ class ResearchStore:
                     request_id,
                     research_run_id,
                     source,
-                    request_url,
-                    json.dumps(request_params, sort_keys=True),
+                    safe_request_url,
+                    json.dumps(safe_request_params, sort_keys=True),
                     license_name,
                 ),
             )
@@ -754,6 +794,19 @@ class ResearchStore:
         if row is None:
             return None
         return json.loads(row["payload"])
+
+    def count_evidence_by_source(self, research_run_id: str, domain: str) -> list[dict[str, Any]]:
+        with self._transaction() as db:
+            rows = self._execute(db,
+                """
+                SELECT source, COUNT(*) as count
+                FROM evidence_records
+                WHERE research_run_id=? AND domain=?
+                GROUP BY source
+                """,
+                (research_run_id, domain),
+            ).fetchall()
+        return [{"source": row["source"], "count": row["count"]} for row in rows]
 
     def get_connector_stats(self) -> list[dict[str, Any]]:
         with self._transaction() as db:

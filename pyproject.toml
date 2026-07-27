@@ -30,9 +30,9 @@ agents = [
 
 [project.scripts]
 pit = "pit.api:main"
-pit-product-intelligence = "agents.product_intelligence.runner:main"
+pit-product-intelligence = "pit_agents.product_intelligence.runner:main"
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
-include = ["pit*", "agents*"]
+include = ["pit*", "pit_agents*"]
 

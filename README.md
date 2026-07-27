@@ -113,7 +113,7 @@ Capa multiagente opcional que genera una **Ficha de Oportunidad** (`GO` / `CONDI
 pip install -e ".[agents]"
 $env:PYTHONPATH = "src;."
 $env:OPENAI_API_KEY = "..."
-python -m agents.product_intelligence `
+python -m pit_agents.product_intelligence `
   --product "Snack proteico de quinua" `
   --market "Perú" `
   --segment "jóvenes profesionales" `
@@ -122,7 +122,7 @@ python -m agents.product_intelligence `
   --output dossier.md
 ```
 
-Documentación completa: `agents/product_intelligence/README.md` · Spec: `agents/product_intelligence/SPEC.md`
+Documentación completa: `pit_agents/product_intelligence/README.md` · Spec: `pit_agents/product_intelligence/SPEC.md`
 
 Los zips históricos v1/v2 están en `assets/archives/`.
 

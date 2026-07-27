@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -42,15 +43,36 @@ class EPOOPSConnector:
     license_name = "EPO OPS; free tier with registration"
     base_url = "https://ops.epo.org/3.2/rest-services/search"
     token_url = "https://oauth.epo.org/oauth2/token"
+    # EPO tokens are typically valid ~20min (1200s); used only if the OAuth
+    # response omits expires_in. The safety margin refreshes a bit early so a
+    # request never starts with a token that expires mid-flight.
+    default_token_ttl_seconds = 1140
+    token_expiry_safety_margin_seconds = 60
 
-    def __init__(self, consumer_key: str, consumer_secret: str) -> None:
+    def __init__(
+        self,
+        consumer_key: str,
+        consumer_secret: str,
+        *,
+        time_func: Callable[[], float] = time.monotonic,
+    ) -> None:
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
         self._access_token: str | None = None
+        self._token_expires_at: float | None = None
+        self._time = time_func
 
-    def _get_access_token(self) -> str:
-        if self._access_token:
+    def _get_access_token(self, *, force_refresh: bool = False) -> str:
+        if (
+            not force_refresh
+            and self._access_token
+            and self._token_expires_at is not None
+            and self._time() < self._token_expires_at
+        ):
             return self._access_token
+        return self._fetch_new_access_token()
+
+    def _fetch_new_access_token(self) -> str:
         credentials = base64.b64encode(f"{self.consumer_key}:{self.consumer_secret}".encode()).decode()
         request = Request(
             self.token_url,
@@ -91,7 +113,13 @@ class EPOOPSConnector:
                 request_url=self.token_url,
                 request_params={"grant_type": "client_credentials"},
             ) from error
+        try:
+            ttl_seconds = int(body.get("expires_in", self.default_token_ttl_seconds))
+        except (TypeError, ValueError):
+            ttl_seconds = self.default_token_ttl_seconds
+        ttl_seconds = max(1, ttl_seconds - self.token_expiry_safety_margin_seconds)
         self._access_token = token
+        self._token_expires_at = self._time() + ttl_seconds
         return token
 
     def search(
@@ -108,33 +136,41 @@ class EPOOPSConnector:
             "format": "json",
         }
         request_url = f"{self.base_url}?{urlencode(params)}"
-        access_token = self._get_access_token()
-        request = Request(
-            request_url,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Accept": "application/json",
-            },
-        )
-        try:
-            with urlopen(request, timeout=20) as response:
-                raw_content = response.read()
-                http_status = response.status
-        except HTTPError as error:
-            raw_content = error.read()
-            raise EPOOPSRequestError(
-                f"EPO OPS returned HTTP {error.code}",
-                http_status=error.code,
-                raw_content=raw_content,
-                request_url=request_url,
-                request_params=params,
-            ) from error
-        except URLError as error:
-            raise EPOOPSRequestError(
-                f"EPO OPS network error: {error.reason}",
-                request_url=request_url,
-                request_params=params,
-            ) from error
+
+        # A cached token can be stale even before our own TTL elapses (e.g.
+        # EPO revokes/expires it early), so a single 401 triggers one forced
+        # refresh + retry before giving up.
+        for attempt in (0, 1):
+            access_token = self._get_access_token(force_refresh=attempt == 1)
+            request = Request(
+                request_url,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json",
+                },
+            )
+            try:
+                with urlopen(request, timeout=20) as response:
+                    raw_content = response.read()
+                    http_status = response.status
+                break
+            except HTTPError as error:
+                if error.code == 401 and attempt == 0:
+                    continue
+                raw_content = error.read()
+                raise EPOOPSRequestError(
+                    f"EPO OPS returned HTTP {error.code}",
+                    http_status=error.code,
+                    raw_content=raw_content,
+                    request_url=request_url,
+                    request_params=params,
+                ) from error
+            except URLError as error:
+                raise EPOOPSRequestError(
+                    f"EPO OPS network error: {error.reason}",
+                    request_url=request_url,
+                    request_params=params,
+                ) from error
 
         try:
             body = json.loads(raw_content)

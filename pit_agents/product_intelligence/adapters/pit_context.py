@@ -54,7 +54,7 @@ def build_context_bundle(*, run_id: str, report: dict[str, Any]) -> PITContextBu
     """Map a PIT JSON report into the three snapshots expected by agent tools."""
     evidence = report.get("evidence_summary") or {}
     score = report.get("score") or {}
-    meta = {
+    meta: dict[str, Any] = {
         "run_id": run_id,
         "query": report.get("query"),
         "target_market": report.get("target_market"),
@@ -68,9 +68,9 @@ def build_context_bundle(*, run_id: str, report: dict[str, Any]) -> PITContextBu
         "sources": report.get("sources") or [],
     }
 
-    scientific = {**meta, "aggregations": {key: evidence[key] for key in SCIENTIFIC_KEYS if key in evidence}}
-    market = {**meta, "aggregations": {key: evidence[key] for key in MARKET_KEYS if key in evidence}}
-    regulatory = {**meta, "aggregations": {key: evidence[key] for key in REGULATORY_KEYS if key in evidence}}
+    scientific: dict[str, Any] = {**meta, "aggregations": {key: evidence[key] for key in SCIENTIFIC_KEYS if key in evidence}}
+    market: dict[str, Any] = {**meta, "aggregations": {key: evidence[key] for key in MARKET_KEYS if key in evidence}}
+    regulatory: dict[str, Any] = {**meta, "aggregations": {key: evidence[key] for key in REGULATORY_KEYS if key in evidence}}
 
     for label, bucket, keys in (
         ("scientific", scientific, SCIENTIFIC_KEYS),
@@ -107,7 +107,7 @@ class PITClient:
         api_key: str | None = None,
         timeout: float = 180.0,
     ) -> None:
-        self.base_url = (base_url or os.getenv("PIT_API_URL", "http://127.0.0.1:8000")).rstrip("/")
+        self.base_url = (base_url if base_url else os.getenv("PIT_API_URL", "http://127.0.0.1:8000")).rstrip("/")
         self.api_key = api_key or os.getenv("PIT_API_KEY")
         self.timeout = timeout
 
