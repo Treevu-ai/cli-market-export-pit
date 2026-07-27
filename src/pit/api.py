@@ -10,6 +10,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any
 
+def _load_env_file() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv()
+
+
+_load_env_file()
+
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
