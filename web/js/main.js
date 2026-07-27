@@ -31,22 +31,43 @@ document.querySelectorAll(".tab").forEach((tab) => {
   });
 });
 
+const WHATSAPP_NUMBER = "51902126765";
+
+function buildLeadMessage(data) {
+  return [
+    "Hola, solicito un análisis exportador con CLI Market Export Intelligence.",
+    "",
+    `Nombre: ${data.nombre}`,
+    `Empresa: ${data.empresa || "-"}`,
+    `Correo: ${data.correo}`,
+    `WhatsApp: ${data.whatsapp || "-"}`,
+    `Producto: ${data.producto}`,
+    `Mercado destino: ${data.mercado}`,
+    `Etapa: ${data.etapa}`,
+  ].join("\n");
+}
+
 const leadForm = document.getElementById("lead-form");
 const leadStatus = document.getElementById("lead-status");
 if (leadForm) {
   leadForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(leadForm).entries());
-    const subject = encodeURIComponent(`Solicitud análisis: ${data.producto || "producto"}`);
-    const body = encodeURIComponent(
-      `Nombre: ${data.nombre}\nEmpresa: ${data.empresa || "-"}\nCorreo: ${data.correo}\nWhatsApp: ${data.whatsapp || "-"}\nProducto: ${data.producto}\nMercado: ${data.mercado}\nEtapa: ${data.etapa}`,
-    );
-    window.location.href = `mailto:acuba0103@gmail.com?subject=${subject}&body=${body}`;
+    const message = encodeURIComponent(buildLeadMessage(data));
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${message}`, "_blank", "noopener,noreferrer");
     if (leadStatus) {
-      leadStatus.textContent = "Se abrió tu cliente de correo con el resumen del pedido.";
+      leadStatus.textContent = "Se abrió WhatsApp con tu solicitud prellenada. Solo envía el mensaje.";
       leadStatus.classList.remove("hidden");
     }
   });
+}
+
+const whatsappFloat = document.querySelector(".whatsapp-float");
+if (whatsappFloat) {
+  const intro = encodeURIComponent(
+    "Hola, me interesa un análisis exportador con CLI Market Export Intelligence.",
+  );
+  whatsappFloat.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${intro}`;
 }
 
 const sectionLinks = document.querySelectorAll('.nav-links a[href^="#"]');

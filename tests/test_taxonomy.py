@@ -31,6 +31,28 @@ class TaxonomyTests(unittest.TestCase):
             )
             self.assertEqual(hs, "081040")
 
+    def test_resolve_hs_code_for_avocado_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="palta hass exportacion",
+            )
+            self.assertEqual(hs, "080440")
+
+    def test_resolve_hs_code_for_mango(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="mango kent",
+            )
+            self.assertEqual(hs, "080450")
+
 
 if __name__ == "__main__":
     unittest.main()
