@@ -6,7 +6,8 @@
   <title>Consola PIT — CLI Market Export Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
   <link rel="stylesheet" href="/css/main.css" />
 </head>
 <body>
@@ -15,6 +16,7 @@
       <div class="container app-header-inner">
         <a class="brand" href="/">CLI MARKET · PIT</a>
         <div style="display:flex;align-items:center;gap:0.75rem;">
+          <span class="status-badge"><span class="connector-dot connector-dot-healthy connector-dot-glow"></span>Motor de investigación</span>
           <span class="status-pill status-idle" id="status-pill">Listo</span>
           <a class="btn btn-secondary" href="/docs" target="_blank" rel="noreferrer" style="padding:0.45rem 0.9rem;font-size:0.85rem;">API</a>
         </div>
@@ -65,6 +67,12 @@
         <p style="font-size:0.85rem;color:var(--text-secondary);margin-top:1rem;">
           Conecta a <code id="api-base" style="font-family:var(--font-mono);font-size:11px;"></code>
         </p>
+
+        <div class="recent-runs" id="recent-runs">
+          <h3>Runs recientes</h3>
+          <div id="recent-runs-list"></div>
+          <p id="recent-runs-empty" style="font-size:0.8rem;color:var(--text-secondary);">Aún no ejecutaste ningún análisis en este navegador.</p>
+        </div>
       </aside>
 
       <section class="panel" id="results-panel">
@@ -81,7 +89,8 @@
               <p style="color:var(--text-secondary);font-size:0.9rem;margin:0.35rem 0 0;" id="run-meta">—</p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-              <button class="btn btn-primary" id="ficha-btn" type="button" style="font-size:0.85rem;padding:0.5rem 0.9rem;" disabled title="Comprobando agentes…">Generar Ficha</button>
+              <a class="btn btn-primary" id="report-link" href="#" style="font-size:0.85rem;padding:0.5rem 0.9rem;">Ver reporte completo</a>
+              <button class="btn btn-secondary" id="ficha-btn" type="button" style="font-size:0.85rem;padding:0.5rem 0.9rem;" disabled title="Comprobando agentes…">Generar Ficha</button>
               <a class="btn btn-secondary" id="pdf-link" href="#" target="_blank" rel="noreferrer" style="font-size:0.85rem;padding:0.5rem 0.9rem;">PDF ejecutivo</a>
               <button class="btn btn-secondary" id="json-toggle" type="button" style="font-size:0.85rem;padding:0.5rem 0.9rem;">Ver JSON</button>
             </div>
@@ -113,7 +122,13 @@
           </div>
 
           <div class="score-hero">
-            <div class="score-ring" id="score-value">—</div>
+            <div class="score-gauge">
+              <svg viewBox="0 0 100 100" width="112" height="112">
+                <circle class="gauge-bg" cx="50" cy="50" r="42"></circle>
+                <circle class="gauge-progress" id="gauge-progress" cx="50" cy="50" r="42"></circle>
+              </svg>
+              <span class="gauge-value" id="score-value">—</span>
+            </div>
             <div>
               <span class="status-pill status-done" id="recommendation-pill">—</span>
               <p style="margin:0.5rem 0 0;color:var(--text-secondary);font-size:0.9rem;">

@@ -7,7 +7,8 @@
   <meta name="description" content="Valida ciencia, mercado y formulación competitiva antes de exportar. CLI Market Export Intelligence con motor PIT." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/main.css" />
 </head>
 <body>
@@ -36,12 +37,13 @@
     <section class="hero">
       <div class="container hero-grid">
         <div>
-          <p class="eyebrow">CLI Market Export Intelligence</p>
-          <h1 class="display">Antes de exportar, valida la ciencia y el mercado.</h1>
+          <span class="status-badge"><span class="connector-dot connector-dot-healthy connector-dot-glow"></span>Motor activo · evidencia trazable</span>
+          <p class="eyebrow" style="margin-top:1rem;">CLI Market Export Intelligence</p>
+          <h1 class="display">Antes de exportar, valida la ciencia y el mercado con evidencia.</h1>
           <p class="lead">Descubre si tu producto tiene respaldo científico, espacio competitivo y una oportunidad real en el mercado objetivo.</p>
           <p style="color:var(--text-secondary);font-weight:600;margin-top:1rem;">No desarrolles primero el producto. Desarrolla primero la evidencia.</p>
           <div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:1.5rem;">
-            <a class="btn btn-primary" href="/analyze.html">Analizar una oportunidad</a>
+            <a class="btn btn-primary" href="/analyze.html">Analizar una oportunidad <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span></a>
             <a class="btn btn-secondary" href="#caso">Ver caso: arándano</a>
           </div>
           <div class="hero-proof">
@@ -52,8 +54,13 @@
         </div>
         <aside class="hero-visual" aria-label="Vista previa de inteligencia">
           <div class="hero-visual-header">
-            <span>PAPER / MARKET / FORMULATION</span>
-            <span>LIVE PREVIEW</span>
+            <span style="display:flex;align-items:center;gap:0.4rem;">
+              <span style="width:0.55rem;height:0.55rem;border-radius:999px;background:var(--error-red);display:inline-block;"></span>
+              <span style="width:0.55rem;height:0.55rem;border-radius:999px;background:var(--warning-gold);display:inline-block;"></span>
+              <span style="width:0.55rem;height:0.55rem;border-radius:999px;background:var(--success-teal);display:inline-block;"></span>
+              <span style="margin-left:0.5rem;">PAPER / MARKET / FORMULATION</span>
+            </span>
+            <span style="color:var(--success-teal);">LIVE PREVIEW</span>
           </div>
           <div class="hero-metrics">
             <div class="metric"><strong>13</strong><span>hallazgos científicos</span></div>

@@ -29,6 +29,57 @@ let currentRunId = null;
 let currentFichaMarkdown = "";
 let fichaAvailable = false;
 
+const RECENT_RUNS_KEY = "pit_recent_runs";
+const RECENT_RUNS_MAX = 8;
+const GAUGE_CIRCUMFERENCE = 263.9;
+
+function loadRecentRuns() {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_RUNS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentRun(entry) {
+  const runs = loadRecentRuns().filter((run) => run.id !== entry.id);
+  runs.unshift(entry);
+  localStorage.setItem(RECENT_RUNS_KEY, JSON.stringify(runs.slice(0, RECENT_RUNS_MAX)));
+  renderRecentRuns();
+}
+
+function renderRecentRuns() {
+  const list = document.getElementById("recent-runs-list");
+  const emptyMsg = document.getElementById("recent-runs-empty");
+  if (!list) return;
+  const runs = loadRecentRuns();
+  list.innerHTML = "";
+  if (emptyMsg) emptyMsg.classList.toggle("hidden", runs.length > 0);
+  runs.forEach((run) => {
+    const item = document.createElement("div");
+    item.className = "recent-run-item";
+    item.innerHTML = `
+      <span class="recent-run-name">${run.query} · ${run.target_market}</span>
+      <span class="recent-run-score">${run.score ?? "—"}</span>
+    `;
+    item.addEventListener("click", () => loadRun(run.id));
+    list.appendChild(item);
+  });
+}
+
+async function loadRun(runId) {
+  clearError();
+  setStatus("running", "Cargando run…");
+  try {
+    const report = await fetchReport(runId);
+    renderReport(report);
+    setStatus("done", "Completado");
+  } catch (error) {
+    setStatus("error", "Error");
+    showError(error.message || String(error));
+  }
+}
+
 const COMPLEMENTARY_KEYS = {
   regulatory_aggregation: {
     title: "Regulación",
@@ -201,6 +252,15 @@ function renderReport(report) {
   document.getElementById("run-meta").textContent = `${report.target_market || "—"} · ${report.application || ""}`;
   document.getElementById("score-value").textContent = score.opportunity_score ?? "—";
   document.getElementById("coverage-value").textContent = score.coverage_factor ?? "—";
+
+  const gauge = document.getElementById("gauge-progress");
+  if (gauge) {
+    const pct = Math.max(0, Math.min(100, Number(score.opportunity_score) || 0));
+    const offset = GAUGE_CIRCUMFERENCE - (pct / 100) * GAUGE_CIRCUMFERENCE;
+    requestAnimationFrame(() => {
+      gauge.style.strokeDashoffset = String(offset);
+    });
+  }
   document.getElementById("score-version").textContent = score.score_version ?? "—";
   document.getElementById("run-id").textContent = report.run_id;
 
@@ -210,6 +270,8 @@ function renderReport(report) {
 
   const pdfLink = document.getElementById("pdf-link");
   if (pdfLink) pdfLink.href = reportPdfUrl(report.run_id);
+  const reportLink = document.getElementById("report-link");
+  if (reportLink) reportLink.href = `/report.html?run_id=${encodeURIComponent(report.run_id)}`;
 
   currentRunId = report.run_id;
   resetFichaPanel();
@@ -253,6 +315,7 @@ function prefillFromQuery() {
 }
 
 prefillFromQuery();
+renderRecentRuns();
 
 document.querySelectorAll(".preset-btn").forEach((button) => {
   button.addEventListener("click", () => {
@@ -329,6 +392,12 @@ if (form) {
       setStatus("running", "Generando reporte…");
       const report = await fetchReport(run.id);
       renderReport(report);
+      saveRecentRun({
+        id: report.run_id,
+        query: report.query,
+        target_market: report.target_market,
+        score: report.score?.opportunity_score,
+      });
       setStatus("done", "Completado");
     } catch (error) {
       setStatus("error", "Error");
