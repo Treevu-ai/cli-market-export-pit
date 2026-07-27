@@ -142,6 +142,11 @@ class ScoringService:
     def calculate_scores(self, run_id: str) -> dict[str, Any]:
         domain_scores = self.build_domain_scores(run_id)
         result = self.engine.calculate(domain_scores)
+        summaries = self.store.get_domain_summaries(run_id)
+        pipeline_warnings = summaries.get("pipeline", {}).get("pipeline_warnings", {})
+        failures = pipeline_warnings.get("failures") or []
+        if failures:
+            result["alerts"] = [*result.get("alerts", []), *failures]
         result["dimensions"] = list(self.engine.weights.keys())
         claims = self._build_claims(run_id, domain_scores, result)
         for item in domain_scores:

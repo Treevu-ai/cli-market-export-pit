@@ -25,7 +25,7 @@ from pit.pubmed import PubMedResponse
 from pit.research import ResearchExecutionError, ResearchService
 from pit.scoring import ScoringService
 from pit.reports import ReportGenerator
-from pit.semanticscholar import SemanticScholarResponse
+from pit.semanticscholar import SemanticScholarRequestError, SemanticScholarResponse
 from pit.storage import ResearchStore
 
 
@@ -140,6 +140,15 @@ class SuccessfulSemanticScholarConnector:
                     "citation_count": 5,
                 }
             ],
+        )
+
+
+class FailingSemanticScholarConnector(SuccessfulSemanticScholarConnector):
+    def search(self, *, query: str, from_publication_date: str, limit: int) -> SemanticScholarResponse:
+        raise SemanticScholarRequestError(
+            "Semantic Scholar returned HTTP 429",
+            http_status=429,
+            raw_content=b'{"error":"rate"}',
         )
 
 
@@ -931,6 +940,26 @@ class ResearchServiceTests(unittest.TestCase):
             body = response.json()
             self.assertEqual(body["data"]["status"], "completed")
             self.assertGreaterEqual(len(body["data"]["sources"]), 1)
+
+    def test_full_pipeline_continues_when_semanticscholar_rate_limited(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, service = self._service(
+                directory,
+                SuccessfulConnector(),
+                semanticscholar_connector=FailingSemanticScholarConnector(),
+            )
+            run = service.run_full_pipeline(
+                query="high-flavanol cocoa powder",
+                target_market="US",
+                application="functional foods and beverages",
+                cutoff_at="2026-07-26T00:00:00+00:00",
+                from_publication_date="2021-01-01",
+                limit=10,
+            )
+            self.assertEqual(run["status"], "completed")
+            self.assertIn("pipeline_warnings", run.get("summaries", {}))
+            failures = run["summaries"]["pipeline_warnings"]["failures"]
+            self.assertTrue(any("semanticscholar" in item for item in failures))
 
     def test_enrich_endpoint_crossref(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

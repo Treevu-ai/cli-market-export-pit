@@ -69,6 +69,9 @@ Invoke-RestMethod -Method Post `
 | `CLIMATIQ_API_KEY` | Huella de carbono Climatiq |
 | `CLIMARKET_API_KEY` / `MARKET_API_KEY` | CLI Market shelf prices e intel |
 | `CLIMARKET_API_URL` / `MARKET_API_URL` | API CLI Market (default: `https://cli-market-api.fly.dev`) |
+| `SEMANTICSCHOLAR_API_KEY` | Semantic Scholar (menos 429, más cuota) |
+
+PIT carga automáticamente `.env` al iniciar (archivo en gitignore).
 
 ## Taxonomía y HS codes
 

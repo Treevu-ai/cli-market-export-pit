@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -40,6 +42,17 @@ class SemanticScholarConnector:
     source = "semanticscholar"
     license_name = "Semantic Scholar Open Data; attribution required"
     base_url = "https://api.semanticscholar.org/graph/v1/paper/search"
+    max_retries = 3
+    retryable_statuses = frozenset({429, 500, 502, 503, 504})
+
+    def __init__(self, api_key: str | None = None) -> None:
+        self.api_key = api_key or os.getenv("SEMANTICSCHOLAR_API_KEY")
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"User-Agent": "PIT/0.1 research-service"}
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+        return headers
 
     def search(self, *, query: str, from_publication_date: str, limit: int) -> SemanticScholarResponse:
         params: dict[str, str] = {
@@ -50,30 +63,54 @@ class SemanticScholarConnector:
         if from_publication_date:
             params["year"] = f"{from_publication_date[:4]}-3000"
         request_url = f"{self.base_url}?{urlencode(params)}"
-        request = Request(
-            request_url,
-            headers={"User-Agent": "PIT/0.1 research-service"},
+        last_error: SemanticScholarRequestError | None = None
+        for attempt in range(self.max_retries):
+            request = Request(request_url, headers=self._headers())
+            try:
+                with urlopen(request, timeout=20) as response:
+                    raw_content = response.read()
+                    http_status = response.status
+                return self._parse_response(
+                    request_url=request_url,
+                    params=params,
+                    http_status=http_status,
+                    raw_content=raw_content,
+                )
+            except HTTPError as error:
+                raw_content = error.read()
+                last_error = SemanticScholarRequestError(
+                    f"Semantic Scholar returned HTTP {error.code}",
+                    http_status=error.code,
+                    raw_content=raw_content,
+                    request_url=request_url,
+                    request_params=params,
+                )
+                if error.code in self.retryable_statuses and attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise last_error from error
+            except URLError as error:
+                raise SemanticScholarRequestError(
+                    f"Semantic Scholar network error: {error.reason}",
+                    request_url=request_url,
+                    request_params=params,
+                ) from error
+        if last_error is not None:
+            raise last_error
+        raise SemanticScholarRequestError(
+            "Semantic Scholar request failed",
+            request_url=request_url,
+            request_params=params,
         )
-        try:
-            with urlopen(request, timeout=20) as response:
-                raw_content = response.read()
-                http_status = response.status
-        except HTTPError as error:
-            raw_content = error.read()
-            raise SemanticScholarRequestError(
-                f"Semantic Scholar returned HTTP {error.code}",
-                http_status=error.code,
-                raw_content=raw_content,
-                request_url=request_url,
-                request_params=params,
-            ) from error
-        except URLError as error:
-            raise SemanticScholarRequestError(
-                f"Semantic Scholar network error: {error.reason}",
-                request_url=request_url,
-                request_params=params,
-            ) from error
 
+    def _parse_response(
+        self,
+        *,
+        request_url: str,
+        params: dict[str, str],
+        http_status: int,
+        raw_content: bytes,
+    ) -> SemanticScholarResponse:
         try:
             body = json.loads(raw_content)
             data_items = body.get("data", [])
