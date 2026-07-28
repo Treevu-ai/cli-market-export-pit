@@ -134,7 +134,7 @@ export const en = {
     eyebrow: "Categories",
     headline: "Products",
     headlineAccent: "you can analyze.",
-    lead: "Cases with real coverage today. Pick a category and launch the analysis directly.",
+    lead: "Cases with real coverage today. Pick a category to pre-load it into your analysis — log in or create a free account to run it.",
     names: {
       Arándano: "Blueberry",
       Cacao: "Cacao",
