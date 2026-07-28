@@ -47,6 +47,19 @@ _SEED_SYNONYMS: list[tuple[str, str]] = [
     ("mandarin", "mandarin"),
     ("mandarins", "mandarin"),
     ("tangerine", "mandarin"),
+    ("kiwicha", "amaranth"),
+    ("amaranto", "amaranth"),
+    ("amaranth", "amaranth"),
+    ("chia", "chia"),
+    ("chía", "chia"),
+    ("chia seeds", "chia"),
+    ("camu camu", "camu_camu"),
+    ("camu-camu", "camu_camu"),
+    ("camucamu", "camu_camu"),
+    ("alcachofa", "artichoke"),
+    ("alcachofas", "artichoke"),
+    ("alcaucil", "artichoke"),
+    ("artichoke", "artichoke"),
 ]
 
 _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
@@ -62,6 +75,10 @@ _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
     ("asparagus", "070920", "Fresh asparagus"),
     ("maca", "121190", "Plants and parts for pharmacy or perfumery"),
     ("mandarin", "080520", "Fresh or dried mandarins, clementines, and tangerines"),
+    ("amaranth", "100890", "Kiwicha (amaranth grain), other cereals n.e.s."),
+    ("chia", "120799", "Chia seeds, other oil seeds n.e.s."),
+    ("camu_camu", "081190", "Camu camu pulp, frozen"),
+    ("artichoke", "070991", "Fresh or chilled globe artichokes"),
 ]
 
 

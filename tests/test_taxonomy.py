@@ -75,6 +75,50 @@ class TaxonomyTests(unittest.TestCase):
             )
             self.assertEqual(hs, "080520")
 
+    def test_resolve_hs_code_for_kiwicha_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="kiwicha organica",
+            )
+            self.assertEqual(hs, "100890")
+
+    def test_resolve_hs_code_for_chia_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="semillas de chia",
+            )
+            self.assertEqual(hs, "120799")
+
+    def test_resolve_hs_code_for_camu_camu_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="pulpa de camu camu congelada",
+            )
+            self.assertEqual(hs, "081190")
+
+    def test_resolve_hs_code_for_artichoke_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="alcachofa fresca",
+            )
+            self.assertEqual(hs, "070991")
+
 
 if __name__ == "__main__":
     unittest.main()
