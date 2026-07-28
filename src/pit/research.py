@@ -875,6 +875,21 @@ class ResearchService:
             for work in response.works:
                 self._store_commerce_work(run_id=run_id, request_id=request_id, work=work)
             self._save_commerce_summary(run_id=run_id, works=response.works, target_market=target_market)
+            if response.intel_brief_error:
+                error_info = response.intel_brief_error
+                intel_request_id = self.store.start_source_request(
+                    research_run_id=run_id,
+                    source="cli_market_intel",
+                    request_url=error_info.get("request_url") or f"{self.commerce_connector.base_url}/v1/intel/brief",
+                    request_params=error_info.get("request_params") or {"country": target_market, "line": line},
+                    license_name=self.commerce_connector.license_name,
+                )
+                self.store.fail_source_request(
+                    request_id=intel_request_id,
+                    http_status=error_info.get("http_status"),
+                    error=error_info.get("message", "CLI Market intel brief failed"),
+                    raw_content=error_info.get("raw_content"),
+                )
         except CLIMarketRequestError as error:
             if request_id is None:
                 request_params = error.request_params or {"query": query, "country": target_market}

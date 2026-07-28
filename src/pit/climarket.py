@@ -35,6 +35,7 @@ class CLIMarketResponse:
     http_status: int
     raw_content: bytes
     works: list[dict[str, Any]]
+    intel_brief_error: dict[str, Any] | None = None
 
 
 DEFAULT_LINE = "supermercados"
@@ -198,11 +199,18 @@ class CLIMarketConnector:
         country = (target_market or "US").upper()
         compare = self.compare_products(query=query, country=country, line=line, limit=limit)
         works = list(compare.works)
+        intel_brief_error: dict[str, Any] | None = None
         try:
             brief = self.intel_brief(country=country, line=line)
             works.extend(brief.works)
-        except CLIMarketRequestError:
-            pass
+        except CLIMarketRequestError as error:
+            intel_brief_error = {
+                "message": str(error),
+                "http_status": error.http_status,
+                "request_url": error.request_url,
+                "request_params": error.request_params,
+                "raw_content": error.raw_content,
+            }
         if not works:
             search = self.search_products(query=query, country=country, line=line, limit=limit)
             works.extend(search.works)
@@ -216,6 +224,7 @@ class CLIMarketConnector:
             http_status=compare.http_status,
             raw_content=json.dumps(combined, sort_keys=True).encode("utf-8"),
             works=works,
+            intel_brief_error=intel_brief_error,
         )
 
     def _normalize_compare(self, payload: dict[str, Any]) -> list[dict[str, Any]]:

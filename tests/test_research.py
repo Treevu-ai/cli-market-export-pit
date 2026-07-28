@@ -493,6 +493,39 @@ class SuccessfulCLIMarketConnector:
         )
 
 
+class CLIMarketConnectorWithFailedIntelBrief:
+    source = "cli_market"
+    license_name = "CLI Market shelf data; attribution required"
+    base_url = "https://cli-market-api.fly.dev"
+
+    def search(self, *, query: str, from_publication_date: str, limit: int, target_market: str | None = None, line: str = "supermercados") -> CLIMarketResponse:
+        return CLIMarketResponse(
+            request_url="https://cli-market-api.fly.dev/products/compare",
+            request_params={"query": query, "country": target_market or "US", "line": line, "limit": str(limit)},
+            http_status=200,
+            raw_content=b'{"comparison":[{"name":"Organic Blueberry 1lb","brand":"Fresh Farms","best_price":5.99,"best_store":"vitacost_us","prices":{"vitacost_us":5.99}}]}',
+            works=[
+                {
+                    "external_id": "compare:0:organic blueberry 1lb",
+                    "title": "Organic Blueberry 1lb",
+                    "brand": "Fresh Farms",
+                    "best_price": 5.99,
+                    "best_store": "vitacost_us",
+                    "prices": {"vitacost_us": 5.99},
+                    "country": target_market or "US",
+                    "source": "cli_market_compare",
+                },
+            ],
+            intel_brief_error={
+                "message": "CLI Market returned HTTP 503",
+                "http_status": 503,
+                "request_url": "https://cli-market-api.fly.dev/v1/intel/brief",
+                "request_params": {"country": target_market or "US", "line": line, "days": "7"},
+                "raw_content": b'{"error":"unavailable"}',
+            },
+        )
+
+
 class ResearchServiceTests(unittest.TestCase):
     def _service(
         self,
@@ -1047,6 +1080,35 @@ class ResearchServiceTests(unittest.TestCase):
             summaries = enriched.get("summaries", {})
             self.assertIn("climarket_aggregation", summaries)
             self.assertEqual(summaries["climarket_aggregation"]["shelf_products_count"], 1)
+
+    def test_commerce_enrichment_records_failed_intel_brief_as_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, service = self._service(
+                directory,
+                SuccessfulConnector(),
+                commerce_connector=CLIMarketConnectorWithFailedIntelBrief(),
+            )
+            initial = service.run_science_research(
+                query="organic blueberry",
+                target_market="US",
+                application="fresh fruit export",
+                cutoff_at="2026-07-24T00:00:00+00:00",
+                from_publication_date="2021-01-01",
+                limit=10,
+            )
+            enriched = service.enrich_with_commerce(run_id=initial["id"], limit=10)
+
+            commerce_evidence = [e for e in enriched["evidence"] if e["domain"] == "commerce"]
+            self.assertEqual(len(commerce_evidence), 1)
+
+            intel_sources = [s for s in enriched["sources"] if s["source"] == "cli_market_intel"]
+            self.assertEqual(len(intel_sources), 1)
+            self.assertEqual(intel_sources[0]["status"], "failed")
+            self.assertEqual(intel_sources[0]["http_status"], 503)
+
+            compare_sources = [s for s in enriched["sources"] if s["source"] == "cli_market"]
+            self.assertEqual(len(compare_sources), 1)
+            self.assertEqual(compare_sources[0]["status"], "completed")
 
     def test_full_pipeline_endpoint_runs_science_step(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
