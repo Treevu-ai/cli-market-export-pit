@@ -2,12 +2,15 @@ app = "cli-market-pit-backend"
 primary_region = "gru"
 
 [build]
+  dockerfile = "Dockerfile.api"
 
 [env]
   PIT_DB_PATH = "/data/pit.db"
   PIT_RAW_DIR = "/data/raw"
   CLIMARKET_API_URL = "https://cli-market-api.fly.dev"
   PIT_CORS_ORIGINS = "https://cli-market-pit.fly.dev"
+  PIT_FRONTEND_URL = "https://cli-market-pit.fly.dev"
+  RESEND_FROM_EMAIL = "CLI Market PIT <hello@cli-market.dev>"
 
 [[mounts]]
   source = "pit_data"
