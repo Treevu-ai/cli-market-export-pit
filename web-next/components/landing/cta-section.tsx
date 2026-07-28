@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useLocale } from "@/lib/i18n/locale-context";
+import { buildMailto } from "@/lib/mailto";
 
 export function CtaSection() {
   const { t } = useLocale();
+  const demoMailto = buildMailto("hello@cli-market.dev", t("demoRequest.subject"), t("demoRequest.body"));
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -79,7 +81,7 @@ export function CtaSection() {
                     variant="outline"
                     className="h-14 px-8 text-base rounded-full border-foreground/20 hover:bg-foreground/5"
                   >
-                    <a href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo">{t("cta.demo")}</a>
+                    <a href={demoMailto}>{t("cta.demo")}</a>
                   </Button>
                 </div>
               </div>

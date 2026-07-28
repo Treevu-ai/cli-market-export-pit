@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import type { HeroStats } from "@/lib/cli-market-stats";
 import { useLocale } from "@/lib/i18n/locale-context";
+import { buildMailto } from "@/lib/mailto";
 
 function BlurWord({ word, trigger }: { word: string; trigger: number }) {
   const letters = word.split("");
@@ -111,6 +112,7 @@ type HeroSectionProps = {
 export function HeroSection({ stats }: HeroSectionProps) {
   const { t, tList } = useLocale();
   const words = tList("hero.words");
+  const demoMailto = buildMailto("hello@cli-market.dev", t("demoRequest.subject"), t("demoRequest.body"));
   const [isVisible, setIsVisible] = useState(false);
   const [wordIndex, setWordIndex] = useState(0);
 
@@ -219,7 +221,7 @@ export function HeroSection({ stats }: HeroSectionProps) {
               {t("hero.ctaSignup")}
             </a>
             <a
-              href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo"
+              href={demoMailto}
               className="inline-flex items-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-medium text-white/90 transition-colors hover:border-white/50"
             >
               {t("hero.ctaDemo")}

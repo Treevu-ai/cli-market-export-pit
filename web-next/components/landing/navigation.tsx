@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useLocale } from "@/lib/i18n/locale-context";
+import { buildMailto } from "@/lib/mailto";
 
 const navHrefs = ["#features", "#metrics", "#infra", "#integrations", "#security"];
 
 export function Navigation() {
   const { t, tList } = useLocale();
   const navLinks = tList("nav.links").map((name, i) => ({ name, href: navHrefs[i] }));
+  const demoMailto = buildMailto("hello@cli-market.dev", t("demoRequest.subject"), t("demoRequest.body"));
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -142,7 +144,7 @@ export function Navigation() {
               className="flex-1 rounded-full h-14 text-base"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              <a href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo">{t("nav.demo")}</a>
+              <a href={demoMailto}>{t("nav.demo")}</a>
             </Button>
             <Button
               asChild

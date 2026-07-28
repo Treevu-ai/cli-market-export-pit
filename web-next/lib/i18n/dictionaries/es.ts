@@ -16,6 +16,10 @@ export const es = {
     demo: "Demo",
     signup: "Regístrate",
   },
+  demoRequest: {
+    subject: "Solicitud de demo — CLI Market PIT",
+    body: "Hola equipo CLI Market PIT,\n\nNos gustaría agendar una demo. Aquí va un poco de contexto:\n\nEmpresa: \nProducto a exportar: \nMercado destino: \n¿Qué te gustaría validar primero? \n\nGracias.",
+  },
   hero: {
     eyebrow: "CLI Market Export Intelligence · motor PIT",
     words: ["ciencia", "mercado", "evidencia", "datos"],
