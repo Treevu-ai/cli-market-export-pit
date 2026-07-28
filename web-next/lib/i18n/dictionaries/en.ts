@@ -77,6 +77,7 @@ export const en = {
       "Scientific publications, patents, foreign trade, shelf prices, and regulation in a single view.",
     checksumLabel: "Checksum per source",
     domainsLabel: "Domains evaluated",
+    domainsList: "Science, patents, trends, foreign trade, shelf, regulatory, sustainability, tech scouting",
     sourceGroups: [
       { name: "Science", status: "verified" },
       { name: "Market", status: "verified" },

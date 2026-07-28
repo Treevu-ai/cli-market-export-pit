@@ -154,6 +154,7 @@ export function InfrastructureSection() {
             }`}>
               <span className="text-5xl lg:text-6xl font-display">8</span>
               <span className="block text-sm text-muted-foreground mt-2">{t("infrastructure.domainsLabel")}</span>
+              <span className="block text-xs text-muted-foreground/70 mt-2">{t("infrastructure.domainsList")}</span>
             </div>
           </div>
         </div>

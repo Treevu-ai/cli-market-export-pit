@@ -77,6 +77,7 @@ export const es = {
       "Publicaciones científicas, patentes, comercio exterior, precios de góndola y regulación en una misma lectura.",
     checksumLabel: "Checksum por fuente",
     domainsLabel: "Dominios evaluados",
+    domainsList: "Ciencia, patentes, tendencias, comercio exterior, góndola, regulatorio, sostenibilidad, tech scouting",
     sourceGroups: [
       { name: "Ciencia", status: "verificado" },
       { name: "Mercado", status: "verificado" },
