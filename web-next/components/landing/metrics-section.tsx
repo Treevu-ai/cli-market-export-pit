@@ -196,7 +196,7 @@ function DotGraph({
 }
 
 export function MetricsSection() {
-  const { t } = useLocale();
+  const { t, tList } = useLocale();
   const metrics = METRIC_VALUES.map((value, i) => ({
     value,
     suffix: "",
@@ -205,7 +205,9 @@ export function MetricsSection() {
     sublabel: t(`metrics.items.${i}.sublabel`),
   }));
   const [isVisible, setIsVisible] = useState(false);
+  const [showMoreSources, setShowMoreSources] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
+  const moreSources = tList("metrics.tickerMore");
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -293,15 +295,31 @@ export function MetricsSection() {
         </div>
 
         {/* Bottom ticker */}
-        <div className={`mt-16 pt-8 border-t border-foreground/10 flex flex-wrap items-center gap-x-12 gap-y-4 text-sm font-mono text-muted-foreground transition-all duration-1000 delay-500 ${
+        <div className={`mt-16 pt-8 border-t border-foreground/10 transition-all duration-1000 delay-500 ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}>
-          <span>OpenAlex</span>
-          <span>Crossref</span>
-          <span>EPO OPS</span>
-          <span>CLI Market</span>
-          <span>OpenFDA</span>
-          <span className="text-foreground">{t("metrics.tickerExtra")}</span>
+          <div className="flex flex-wrap items-center gap-x-12 gap-y-4 text-sm font-mono text-muted-foreground">
+            <span>OpenAlex</span>
+            <span>Crossref</span>
+            <span>EPO OPS</span>
+            <span>CLI Market</span>
+            <span>OpenFDA</span>
+            <button
+              type="button"
+              onClick={() => setShowMoreSources((prev) => !prev)}
+              aria-expanded={showMoreSources}
+              className="text-foreground underline underline-offset-2 decoration-foreground/30 hover:decoration-foreground transition-colors"
+            >
+              {t("metrics.tickerExtra")}
+            </button>
+          </div>
+          {showMoreSources && (
+            <div className="mt-4 flex flex-wrap items-center gap-x-12 gap-y-4 text-sm font-mono text-muted-foreground">
+              {moreSources.map((source) => (
+                <span key={source}>{source}</span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>
