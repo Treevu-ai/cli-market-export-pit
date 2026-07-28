@@ -101,17 +101,22 @@ python scripts/demo_arandano.py
 
 ## Frontend
 
-Frontend en `web-next/` — Next.js 15 (App Router) con export estático, Tailwind v4 y componentes shadcn/Radix, tema Deep Tech Blue/Teal. Tres páginas: landing (`/`), consola de análisis (`/analyze/`) y visor de reporte (`/report/?run_id=...`), todas consumiendo la API PIT vía `lib/pit-api.ts`.
+Frontend en `web-next/` — Next.js 15 (App Router) corriendo como servidor Node (`next start`), Tailwind v4 y componentes shadcn/Radix, tema Deep Tech Blue/Teal. Tres páginas: landing (`/`), consola de análisis (`/analyze/`) y visor de reporte (`/report/?run_id=...`), todas consumiendo la API PIT vía `lib/pit-api.ts`. El hero de la landing muestra estadísticas reales de CLI Market (`lib/cli-market-stats.ts`), obtenidas server-side y revalidadas cada 5 min.
 
 **Desarrollo local:**
 
 ```powershell
 cd web-next
 npm install
-npm run dev        # http://localhost:3000, apunta a la API con window.PIT_API_BASE si corre en otro puerto
+npm run dev        # http://localhost:3000, apunta a la API con window.PIT_API_BASE o NEXT_PUBLIC_PIT_API_URL si corre en otro origen
 ```
 
-**Build de producción** (`npm run build`) genera export estático en `web-next/out/` — sin servidor Node en producción. El `Dockerfile` compila este export en un stage Node y copia el resultado a `web/` dentro de la imagen final; el servidor FastAPI lo sirve como estáticos en `/`, igual que antes. Por eso mismo origin sirve API y frontend en producción, sin configuración de CORS.
+**Producción — dos apps Fly separadas:**
+
+- `cli-market-pit` (`Dockerfile` + `fly.toml`): el frontend Next.js (`next start`, puerto 8080). `NEXT_PUBLIC_PIT_API_URL` apunta al backend. La API key de CLI Market se pasa solo en build time vía `--build-secret climarket_api_key=$CLIMARKET_API_KEY` (nunca queda en una capa de la imagen).
+- `cli-market-pit-backend` (`Dockerfile.api` + `fly.api.toml`): la API FastAPI + el volumen `pit_data` (SQLite). Tiene `PIT_CORS_ORIGINS` configurado para aceptar al frontend.
+
+Como son dos orígenes distintos, el frontend depende del CORS del backend (`PIT_CORS_ORIGINS`, ver `src/pit/api.py`).
 
 Reemplaza el frontend vanilla JS/HTML anterior (ver `docs/academy_narrative_prd.md` y el historial de commits para el contexto de la migración). Borrador original en `landing/index.html`.
 

@@ -10,6 +10,9 @@ declare global {
 export function getApiBase(): string {
   if (typeof window === "undefined") return "";
   if (window.PIT_API_BASE) return window.PIT_API_BASE.replace(/\/$/, "");
+  if (process.env.NEXT_PUBLIC_PIT_API_URL) {
+    return process.env.NEXT_PUBLIC_PIT_API_URL.replace(/\/$/, "");
+  }
   if (window.location.protocol === "file:") return "http://127.0.0.1:8000";
   return window.location.origin.replace(/\/$/, "");
 }

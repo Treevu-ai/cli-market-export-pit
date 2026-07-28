@@ -1,4 +1,4 @@
-FROM node:22-slim AS web-builder
+FROM node:22-slim AS builder
 
 WORKDIR /web
 
@@ -6,44 +6,32 @@ COPY web-next/package.json web-next/package-lock.json ./
 RUN npm ci
 
 COPY web-next/ .
-RUN npm run build
 
-FROM python:3.14-slim AS builder
+ARG NEXT_PUBLIC_PIT_API_URL
+ENV NEXT_PUBLIC_PIT_API_URL=$NEXT_PUBLIC_PIT_API_URL
 
-WORKDIR /app
+RUN --mount=type=secret,id=climarket_api_key \
+    sh -c 'if [ -f /run/secrets/climarket_api_key ]; then export CLIMARKET_API_KEY="$(cat /run/secrets/climarket_api_key)"; fi; npm run build'
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+FROM node:22-slim
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir --user .
+WORKDIR /web
 
-FROM python:3.14-slim
+RUN groupadd -r web && useradd -r -g web -d /web web
 
-WORKDIR /app
+COPY --from=builder /web/.next ./.next
+COPY --from=builder /web/public ./public
+COPY --from=builder /web/package.json /web/package-lock.json ./
+COPY --from=builder /web/node_modules ./node_modules
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+RUN chown -R web:web /web
+USER web
 
-RUN groupadd -r pit && useradd -r -g pit -d /app pit
-
-COPY --from=builder /root/.local /home/pit/.local
-COPY src/ src/
-COPY --from=web-builder /web/out/ web/
-COPY assets/ assets/
-
-RUN chown -R pit:pit /app /home/pit
-USER pit
-
-ENV HOME="/home/pit"
-ENV PATH="/home/pit/.local/bin:${PATH}"
-ENV PYTHONPATH="/app/src"
-EXPOSE 8000
+ENV NODE_ENV=production
+ENV PORT=8080
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health')"
+    CMD node -e "fetch('http://localhost:8080/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["uvicorn", "pit.api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["npm", "run", "start"]

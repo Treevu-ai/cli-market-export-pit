@@ -2,7 +2,9 @@ version: "3.9"
 
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     ports:
       - "8000:8000"
     environment:
@@ -18,6 +20,7 @@ services:
       CLIMARKET_API_KEY: ${CLIMARKET_API_KEY:-${MARKET_API_KEY:-}}
       CLIMARKET_API_URL: ${CLIMARKET_API_URL:-https://cli-market-api.fly.dev}
       DATABASE_URL: ${DATABASE_URL:-postgresql://pit:pit@db:5432/pit}
+      PIT_CORS_ORIGINS: ${PIT_CORS_ORIGINS:-http://localhost:3000}
     volumes:
       - pit_data:/data
     depends_on:
@@ -28,6 +31,17 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_PIT_API_URL: ${NEXT_PUBLIC_PIT_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:8080"
+    depends_on:
+      - api
 
   db:
     image: postgres:16-alpine
