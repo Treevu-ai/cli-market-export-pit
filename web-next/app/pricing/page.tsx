@@ -22,7 +22,7 @@ const PLANS = [
     period: "",
     limit: "Volumen a medida",
     features: ["Todo lo de Pro", "Integración con tu catálogo", "SLA y soporte dedicado"],
-    cta: { label: "Contáctanos", href: "mailto:hola@treevu.ai?subject=CLI%20Market%20PIT%20Enterprise" },
+    cta: { label: "Contáctanos", href: "mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Enterprise" },
   },
 ];
 

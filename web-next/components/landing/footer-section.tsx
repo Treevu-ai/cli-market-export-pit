@@ -9,12 +9,18 @@ const footerLinks = {
     { name: "Caso real", href: "#metrics" },
     { name: "Fuentes", href: "#infra" },
     { name: "Categorías", href: "#integrations" },
+    { name: "Precios", href: "/pricing" },
   ],
   Desarrolladores: [
-    { name: "API Docs", href: "/docs" },
+    { name: "API Docs", href: "https://cli-market-pit-backend.fly.dev/docs" },
     { name: "Consola PIT", href: "/analyze/" },
     { name: "Reporte de ejemplo", href: "/report/" },
     { name: "Trazabilidad", href: "#security" },
+  ],
+  Legal: [
+    { name: "Soporte", href: "/support" },
+    { name: "Privacidad", href: "/legal/privacy" },
+    { name: "Términos", href: "/legal/terms" },
   ],
 };
 
@@ -92,7 +98,7 @@ export function FooterSection() {
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12">
         {/* Main Footer */}
         <div className="py-16 lg:py-20">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 lg:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-12 lg:gap-8">
             {/* Brand Column */}
             <div className="col-span-2">
               <a href="/" className="inline-flex items-center gap-2 mb-6">

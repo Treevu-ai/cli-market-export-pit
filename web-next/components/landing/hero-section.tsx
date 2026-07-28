@@ -213,16 +213,16 @@ export function HeroSection({ stats }: HeroSectionProps) {
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <a
-              href="/analyze/"
+              href="/signup/"
               className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-transform hover:-translate-y-0.5"
             >
-              Analizar una oportunidad
+              Regístrate gratis
             </a>
             <a
-              href="#metrics"
+              href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo"
               className="inline-flex items-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-medium text-white/90 transition-colors hover:border-white/50"
             >
-              Ver caso: arándano
+              Solicita una demo
             </a>
           </div>
         </div>

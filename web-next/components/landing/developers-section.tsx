@@ -106,7 +106,7 @@ export function DevelopersSection() {
             ))}
           </div>
           <a
-            href="/docs"
+            href="https://cli-market-pit-backend.fly.dev/docs" target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-sm font-mono text-foreground border-b border-foreground/30 pb-1 hover:border-foreground transition-colors"
           >
             Ver documentación OpenAPI →

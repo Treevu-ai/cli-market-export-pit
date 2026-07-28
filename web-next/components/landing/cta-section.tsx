@@ -67,8 +67,8 @@ export function CtaSection() {
                     size="lg"
                     className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 h-14 text-base rounded-full group"
                   >
-                    <a href="/analyze/">
-                      Analizar una oportunidad
+                    <a href="/signup/">
+                      Regístrate gratis
                       <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                     </a>
                   </Button>
@@ -78,7 +78,7 @@ export function CtaSection() {
                     variant="outline"
                     className="h-14 px-8 text-base rounded-full border-foreground/20 hover:bg-foreground/5"
                   >
-                    <a href="/docs">Ver API</a>
+                    <a href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo">Solicita una demo</a>
                   </Button>
                 </div>
               </div>

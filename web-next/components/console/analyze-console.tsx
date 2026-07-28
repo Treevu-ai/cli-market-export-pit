@@ -146,7 +146,7 @@ export function AnalyzeConsole() {
             <span className={`rounded-full px-3 py-1 font-mono text-xs ${statusInfo.className}`}>
               {statusInfo.label}
             </span>
-            <a href="/docs" className="text-sm text-muted-foreground hover:text-foreground">
+            <a href="https://cli-market-pit-backend.fly.dev/docs" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground hover:text-foreground">
               API Docs
             </a>
           </div>

@@ -72,7 +72,7 @@ export function Navigation() {
             <a href="/login" className={`transition-all duration-500 ${isScrolled ? "text-xs text-foreground/70 hover:text-foreground" : "text-sm text-white/70 hover:text-white"}`}>
               Iniciar sesión
             </a>
-            <a href="/docs" className={`transition-all duration-500 ${isScrolled ? "text-xs text-foreground/70 hover:text-foreground" : "text-sm text-white/70 hover:text-white"}`}>
+            <a href="https://cli-market-pit-backend.fly.dev/docs" target="_blank" rel="noopener noreferrer" className={`transition-all duration-500 ${isScrolled ? "text-xs text-foreground/70 hover:text-foreground" : "text-sm text-white/70 hover:text-white"}`}>
               API Docs
             </a>
             <Button
@@ -80,7 +80,7 @@ export function Navigation() {
               size="sm"
               className={`rounded-full transition-all duration-500 ${isScrolled ? "bg-primary hover:bg-primary/90 text-primary-foreground px-4 h-8 text-xs" : "bg-primary hover:bg-primary/90 text-primary-foreground px-6"}`}
             >
-              <a href="/analyze/">Analizar oportunidad</a>
+              <a href="/signup/">Regístrate gratis</a>
             </Button>
           </div>
 
@@ -143,14 +143,14 @@ export function Navigation() {
               className="flex-1 rounded-full h-14 text-base"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              <a href="/docs">API Docs</a>
+              <a href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo">Demo</a>
             </Button>
             <Button
               asChild
               className="flex-1 bg-primary text-primary-foreground rounded-full h-14 text-base"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              <a href="/analyze/">Analizar</a>
+              <a href="/signup/">Regístrate</a>
             </Button>
           </div>
         </div>
