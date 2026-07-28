@@ -21,11 +21,12 @@ def _load_env_file() -> None:
 
 _load_env_file()
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
+from . import auth
 from .climarket import CLIMarketConnector
 from .climatiq import ClimatiqConnector
 from .bcrp import BCRPConnector
@@ -90,6 +91,21 @@ class FichaCreate(BaseModel):
     market_label: Annotated[str | None, Field(max_length=120)] = None
 
 
+class SignupCreate(BaseModel):
+    email: EmailStr
+    password: Annotated[str, Field(min_length=8, max_length=200)]
+
+
+class LoginCreate(BaseModel):
+    email: EmailStr
+    password: Annotated[str, Field(min_length=8, max_length=200)]
+
+
+class SetTierCreate(BaseModel):
+    email: EmailStr
+    tier: Annotated[str, Field(pattern=r"^(free|pro|enterprise)$")]
+
+
 def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerator]:
     database_path = Path(os.getenv("PIT_DB_PATH", "data/pit.db"))
     raw_directory = Path(os.getenv("PIT_RAW_DIR", "data/raw"))
@@ -122,7 +138,6 @@ def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerato
     return service, ScoringService(store), ReportGenerator()
 
 
-_API_KEY = os.getenv("PIT_API_KEY")
 _ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("PIT_CORS_ORIGINS", "").split(",") if origin.strip()]
 
 
@@ -179,7 +194,10 @@ class Metrics:
 _metrics = Metrics()
 
 
-class APIKeyMiddleware:
+class RequestMetricsMiddleware:
+    """Records request duration/status for /metrics. Auth is handled per-route
+    via the `get_current_user`/`require_quota` dependencies, not here."""
+
     def __init__(self, app: Any) -> None:
         self.app = app
 
@@ -187,15 +205,6 @@ class APIKeyMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        api_key = os.getenv("PIT_API_KEY")
-        if api_key:
-            headers = {key.decode().lower(): value.decode() for key, value in scope.get("headers", [])}
-            request_api_key = headers.get("x-api-key")
-            if request_api_key is None or not secrets.compare_digest(request_api_key, api_key):
-                from starlette.responses import JSONResponse
-                response = JSONResponse({"detail": "Invalid API key"}, status_code=401)
-                await response(scope, receive, send)
-                return
         start_time = time.perf_counter()
         status_code_holder = {"status_code": 200}
 
@@ -246,7 +255,7 @@ def create_app(
         version="0.1.0",
         description="Traceable technology-intelligence research runs.",
     )
-    app.add_middleware(APIKeyMiddleware)
+    app.add_middleware(RequestMetricsMiddleware)
     if _ALLOWED_ORIGINS:
         from starlette.middleware.cors import CORSMiddleware
         app.add_middleware(
@@ -254,15 +263,110 @@ def create_app(
             allow_origins=_ALLOWED_ORIGINS,
             allow_methods=["*"],
             allow_headers=["*"],
+            allow_credentials=True,
         )
     _setup_logging()
+
+    def get_current_user(request: Request) -> dict[str, Any]:
+        token: str | None = None
+        authorization = request.headers.get("authorization")
+        if authorization and authorization.lower().startswith("bearer "):
+            token = authorization.split(" ", 1)[1]
+        if token is None:
+            token = request.cookies.get("pit_session")
+        if not token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        try:
+            payload = auth.decode_access_token(token)
+        except auth.TokenError as error:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session") from error
+        user = research_service.store.get_user_by_id(payload["sub"])
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        return user
+
+    def require_quota(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
+        plan = auth.PLANS.get(user["tier"], auth.PLANS["free"])
+        limit = plan["monthly_limit"]
+        period = auth.current_period()
+        new_count = research_service.store.get_and_increment_usage(user_id=user["id"], period=period, limit=limit)
+        if new_count is None:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "message": "Monthly limit reached",
+                    "tier": user["tier"],
+                    "limit": limit,
+                    "upgrade_url": "/pricing",
+                },
+            )
+        return user
+
+    def _set_session_cookie(response: Response, token: str) -> None:
+        response.set_cookie(
+            "pit_session",
+            token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            max_age=7 * 24 * 3600,
+        )
+
+    def require_admin(request: Request) -> None:
+        admin_secret = os.getenv("PIT_ADMIN_SECRET")
+        provided = request.headers.get("x-admin-secret")
+        if not admin_secret or not provided or not secrets.compare_digest(provided, admin_secret):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin secret")
 
     @app.get("/v1/health")
     def health_check() -> dict[str, str]:
         return {"status": "ok", "version": "0.1.0"}
 
+    @app.post("/v1/auth/signup", status_code=status.HTTP_201_CREATED)
+    def signup(payload: SignupCreate, response: Response) -> dict[str, Any]:
+        if research_service.store.get_user_by_email(payload.email) is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+        password_hash = auth.hash_password(payload.password)
+        user = research_service.store.create_user(email=payload.email, password_hash=password_hash)
+        token = auth.create_access_token(user_id=user["id"], email=user["email"])
+        _set_session_cookie(response, token)
+        return _envelope({"token": token, "email": user["email"], "tier": user["tier"]})
+
+    @app.post("/v1/auth/login")
+    def login(payload: LoginCreate, response: Response) -> dict[str, Any]:
+        user = research_service.store.get_user_by_email(payload.email)
+        if user is None or not auth.verify_password(payload.password, user["password_hash"]):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        token = auth.create_access_token(user_id=user["id"], email=user["email"])
+        _set_session_cookie(response, token)
+        return _envelope({"token": token, "email": user["email"], "tier": user["tier"]})
+
+    @app.post("/v1/auth/logout")
+    def logout(response: Response) -> dict[str, Any]:
+        response.delete_cookie("pit_session", secure=True, samesite="none")
+        return _envelope({"logged_out": True})
+
+    @app.get("/v1/auth/me")
+    def get_me(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
+        plan = auth.PLANS.get(user["tier"], auth.PLANS["free"])
+        period = auth.current_period()
+        used = research_service.store.get_usage(user_id=user["id"], period=period)
+        return _envelope({
+            "email": user["email"],
+            "tier": user["tier"],
+            "usage": {"used": used, "limit": plan["monthly_limit"], "period": period},
+        })
+
+    @app.post("/v1/admin/set-tier", dependencies=[Depends(require_admin)])
+    def set_tier(payload: SetTierCreate) -> dict[str, Any]:
+        user = research_service.store.get_user_by_email(payload.email)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
+        updated = research_service.store.set_user_tier(user["id"], payload.tier)
+        return _envelope({"email": updated["email"], "tier": updated["tier"]})
+
     @app.post("/v1/research-runs", status_code=status.HTTP_201_CREATED)
-    def create_research_run(payload: ResearchRunCreate) -> dict[str, Any]:
+    def create_research_run(payload: ResearchRunCreate, _user: dict[str, Any] = Depends(require_quota)) -> dict[str, Any]:
         try:
             run = research_service.run_science_research(
                 query=payload.query,
@@ -277,7 +381,7 @@ def create_app(
         return _envelope(run)
 
     @app.post("/v1/research-runs/full", status_code=status.HTTP_201_CREATED)
-    def create_full_research_run(payload: ResearchRunFullCreate) -> dict[str, Any]:
+    def create_full_research_run(payload: ResearchRunFullCreate, _user: dict[str, Any] = Depends(require_quota)) -> dict[str, Any]:
         try:
             run = research_service.run_full_pipeline(
                 query=payload.query,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -553,6 +554,19 @@ class SuccessfulBCRPConnector:
 
 
 class ResearchServiceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        os.environ["PIT_JWT_SECRET"] = "test-jwt-secret-for-unit-tests-only-32b"
+
+    def tearDown(self) -> None:
+        os.environ.pop("PIT_JWT_SECRET", None)
+
+    def _signup_and_login(
+        self, client: TestClient, email: str = "user@example.com", password: str = "testpass123"
+    ) -> str:
+        response = client.post("/v1/auth/signup", json={"email": email, "password": password})
+        assert response.status_code == 201, response.text
+        return response.json()["data"]["token"]
+
     def _service(
         self,
         directory: str,
@@ -642,10 +656,12 @@ class ResearchServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             _, service = self._service(directory, SuccessfulConnector())
             client = TestClient(create_app(service))
+            token = self._signup_and_login(client)
 
             created = client.post(
                 "/v1/research-runs",
                 json={"query": "high-flavanol cocoa powder", "limit": 10},
+                headers={"Authorization": f"Bearer {token}"},
             )
 
             self.assertEqual(created.status_code, 201)
@@ -925,20 +941,6 @@ class ResearchServiceTests(unittest.TestCase):
             self.assertIn("quota", body)
             self.assertIn("metrics", body)
 
-    def test_api_key_required_when_set(self) -> None:
-        import os
-        os.environ["PIT_API_KEY"] = "secret123"
-        try:
-            with tempfile.TemporaryDirectory() as directory:
-                _, service = self._service(directory, SuccessfulConnector())
-                client = TestClient(create_app(service))
-                response = client.get("/v1/health")
-                self.assertEqual(response.status_code, 401)
-                response = client.get("/v1/health", headers={"X-API-Key": "secret123"})
-                self.assertEqual(response.status_code, 200)
-        finally:
-            os.environ.pop("PIT_API_KEY", None)
-
     def test_techscout_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store, service = self._service(
@@ -1181,9 +1183,11 @@ class ResearchServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             _, service = self._service(directory, SuccessfulConnector())
             client = TestClient(create_app(service))
+            token = self._signup_and_login(client)
             response = client.post(
                 "/v1/research-runs/full",
                 json={"query": "high-flavanol cocoa powder", "limit": 10},
+                headers={"Authorization": f"Bearer {token}"},
             )
             self.assertEqual(response.status_code, 201)
             body = response.json()

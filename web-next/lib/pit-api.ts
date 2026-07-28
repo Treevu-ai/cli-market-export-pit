@@ -17,6 +17,25 @@ export function getApiBase(): string {
   return window.location.origin.replace(/\/$/, "");
 }
 
+// Sessions live in the httpOnly `pit_session` cookie the backend sets on
+// signup/login (credentials: "include" below) — never in localStorage, which
+// any XSS could read. The backend also returns the raw token in the response
+// body for non-browser API clients; the browser client intentionally never
+// persists it.
+
+export class QuotaExceededError extends Error {
+  tier: string;
+  limit: number | null;
+  upgradeUrl: string;
+
+  constructor(detail: { message?: string; tier: string; limit: number | null; upgrade_url: string }) {
+    super(detail.message || "Monthly limit reached");
+    this.tier = detail.tier;
+    this.limit = detail.limit;
+    this.upgradeUrl = detail.upgrade_url;
+  }
+}
+
 export async function pitRequest<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -26,9 +45,12 @@ export async function pitRequest<T = unknown>(path: string, options: RequestInit
   if (typeof window !== "undefined" && window.PIT_API_KEY) {
     headers["X-API-Key"] = window.PIT_API_KEY;
   }
-  const response = await fetch(`${getApiBase()}${path}`, { ...options, headers });
+  const response = await fetch(`${getApiBase()}${path}`, { ...options, headers, credentials: "include" });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 402 && payload.detail && typeof payload.detail === "object") {
+      throw new QuotaExceededError(payload.detail);
+    }
     const detail = payload.detail || payload.message || response.statusText;
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }
@@ -179,4 +201,41 @@ export function saveRecentRun(entry: RecentRun): RecentRun[] {
     window.localStorage.setItem(RECENT_RUNS_KEY, JSON.stringify(trimmed));
   }
   return trimmed;
+}
+
+export interface AuthSession {
+  token: string;
+  email: string;
+  tier: string;
+}
+
+export interface MeResponse {
+  email: string;
+  tier: string;
+  usage: { used: number; limit: number | null; period: string };
+}
+
+export async function signup(email: string, password: string): Promise<AuthSession> {
+  const envelope = await pitRequest<{ data: AuthSession }>("/v1/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  return envelope.data;
+}
+
+export async function login(email: string, password: string): Promise<AuthSession> {
+  const envelope = await pitRequest<{ data: AuthSession }>("/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  return envelope.data;
+}
+
+export async function logout(): Promise<void> {
+  await pitRequest("/v1/auth/logout", { method: "POST" });
+}
+
+export async function getMe(): Promise<MeResponse> {
+  const envelope = await pitRequest<{ data: MeResponse }>("/v1/auth/me");
+  return envelope.data;
 }

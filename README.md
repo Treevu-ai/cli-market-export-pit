@@ -62,7 +62,8 @@ Invoke-RestMethod -Method Post `
 | `PIT_RAW_DIR` | Raw responses (default: `data/raw`) |
 | `DATABASE_URL` | PostgreSQL (`postgresql://...`) |
 | `PIT_CONTACT_EMAIL` | Email para pool cortés Crossref |
-| `PIT_API_KEY` | API key (header `X-API-Key`) |
+| `PIT_JWT_SECRET` | Firma los tokens de sesión (cuentas de usuario, ver abajo) |
+| `PIT_ADMIN_SECRET` | Header `X-Admin-Secret` para `/v1/admin/set-tier` |
 | `PIT_CORS_ORIGINS` | Orígenes CORS separados por coma |
 | `EPO_OPS_CONSUMER_KEY` / `SECRET` | Patentes EPO OPS |
 | `FOODDATA_CENTRAL_API_KEY` | USDA FoodData Central |

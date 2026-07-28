@@ -1,0 +1,65 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { getMe, logout, type MeResponse } from "@/lib/pit-api";
+
+export function AccountView() {
+  const [session, setSession] = useState<MeResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getMe()
+      .then(setSession)
+      .catch(() => setSession(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleLogout() {
+    await logout();
+    window.location.href = "/login";
+  }
+
+  if (loading) return null;
+
+  if (!session) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 text-center">
+        <p className="text-muted-foreground">No has iniciado sesión.</p>
+        <a href="/login" className="mt-4 text-[#64ffda] hover:underline">
+          Iniciar sesión
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-lg px-6 py-24">
+      <h1 className="font-display text-3xl">Mi cuenta</h1>
+      <div className="mt-8 space-y-4 border border-foreground/10 bg-foreground/[0.02] p-6">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Email</span>
+          <span>{session.email}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Plan</span>
+          <span className="capitalize">{session.tier}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Uso este mes ({session.usage.period})</span>
+          <span className="font-mono text-[#64ffda]">
+            {session.usage.used}
+            {session.usage.limit !== null ? ` / ${session.usage.limit}` : " (sin límite)"}
+          </span>
+        </div>
+      </div>
+      <div className="mt-6 flex gap-4">
+        <a href="/pricing" className="rounded-full bg-[#64ffda] px-5 py-2 text-sm font-medium text-[#0a192f]">
+          Ver planes / actualizar
+        </a>
+        <button onClick={handleLogout} className="rounded-full border border-foreground/20 px-5 py-2 text-sm">
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+  );
+}

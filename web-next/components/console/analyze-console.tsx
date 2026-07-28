@@ -6,10 +6,13 @@ import {
   fetchAgentsStatus,
   fetchReport,
   generateFicha,
+  getMe,
   loadRecentRuns,
   runFullPipeline,
   saveRecentRun,
   MARKET_COVERAGE,
+  QuotaExceededError,
+  type MeResponse,
   type ReportData,
   type RecentRun,
 } from "@/lib/pit-api";
@@ -55,6 +58,9 @@ export function AnalyzeConsole() {
   const [report, setReport] = useState<ReportData | null>(null);
   const [recentRuns, setRecentRuns] = useState<RecentRun[]>([]);
   const [fichaAvailable, setFichaAvailable] = useState(false);
+  const [session, setSession] = useState<MeResponse | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [quotaNotice, setQuotaNotice] = useState<QuotaExceededError | null>(null);
 
   useEffect(() => {
     const q = searchParams.get("query");
@@ -65,6 +71,10 @@ export function AnalyzeConsole() {
     fetchAgentsStatus()
       .then((s) => setFichaAvailable(Boolean(s.ficha_available)))
       .catch(() => setFichaAvailable(false));
+    getMe()
+      .then((me) => setSession(me))
+      .catch(() => setSession(null))
+      .finally(() => setSessionChecked(true));
   }, [searchParams]);
 
   const coverage = useMemo(() => MARKET_COVERAGE[targetMarket], [targetMarket]);
@@ -85,6 +95,7 @@ export function AnalyzeConsole() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMessage("");
+    setQuotaNotice(null);
     setStatus("running");
     try {
       const run = await runFullPipeline({
@@ -104,9 +115,14 @@ export function AnalyzeConsole() {
         score: data.score?.opportunity_score ?? null,
       });
       setRecentRuns(updated);
+      getMe().then(setSession).catch(() => {});
     } catch (error) {
       setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : String(error));
+      if (error instanceof QuotaExceededError) {
+        setQuotaNotice(error);
+      } else {
+        setErrorMessage(error instanceof Error ? error.message : String(error));
+      }
     }
   }
 
@@ -140,6 +156,28 @@ export function AnalyzeConsole() {
       <div className="mx-auto grid max-w-[1400px] gap-8 px-6 py-10 lg:grid-cols-[360px_1fr] lg:px-12">
         {/* Form column */}
         <aside className="space-y-6">
+          {sessionChecked && !session && (
+            <div className="border border-foreground/10 bg-foreground/[0.02] p-6 text-sm">
+              <h2 className="font-display text-lg">Inicia sesión para analizar</h2>
+              <p className="mt-2 text-muted-foreground">
+                Crea una cuenta gratis (5 análisis/mes) para ejecutar el pipeline completo.
+              </p>
+              <div className="mt-4 flex gap-3">
+                <a href="/signup" className="rounded-full bg-[#64ffda] px-4 py-2 text-xs font-medium text-[#0a192f]">
+                  Crear cuenta
+                </a>
+                <a href="/login" className="rounded-full border border-foreground/20 px-4 py-2 text-xs">
+                  Ya tengo cuenta
+                </a>
+              </div>
+            </div>
+          )}
+          {session && (
+            <div className="border border-foreground/10 bg-foreground/[0.02] p-4 text-xs text-muted-foreground">
+              {session.email} · plan {session.tier} · {session.usage.used}
+              {session.usage.limit !== null ? `/${session.usage.limit}` : ""} análisis este mes
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-5 border border-foreground/10 bg-foreground/[0.02] p-6">
             <h2 className="font-display text-lg">Nueva consulta</h2>
 
@@ -240,7 +278,7 @@ export function AnalyzeConsole() {
 
             <button
               type="submit"
-              disabled={status === "running"}
+              disabled={status === "running" || (sessionChecked && !session)}
               className="w-full rounded-full bg-[#64ffda] px-5 py-3 text-sm font-medium text-[#0a192f] transition-opacity disabled:opacity-40"
             >
               {status === "running" ? "Ejecutando pipeline…" : "Ejecutar pipeline completo"}
@@ -272,6 +310,14 @@ export function AnalyzeConsole() {
 
         {/* Results column */}
         <main>
+          {quotaNotice && (
+            <div className="mb-6 border border-[#ffd700]/30 bg-[#ffd700]/10 p-4 text-sm text-[#ffd700]">
+              Llegaste al límite de tu plan {quotaNotice.tier} ({quotaNotice.limit} análisis/mes).{" "}
+              <a href={quotaNotice.upgradeUrl} className="underline">
+                Ver planes
+              </a>
+            </div>
+          )}
           {errorMessage && (
             <div className="mb-6 border border-[#e11d48]/30 bg-[#e11d48]/10 p-4 text-sm text-[#e11d48]">
               {errorMessage}

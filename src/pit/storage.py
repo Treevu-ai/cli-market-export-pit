@@ -133,6 +133,8 @@ class ResearchStore:
                     "CREATE TABLE IF NOT EXISTS domain_scores (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, domain TEXT NOT NULL, score INTEGER NOT NULL, confidence TEXT NOT NULL, weight REAL NOT NULL, coverage REAL NOT NULL, created_at TEXT NOT NULL, UNIQUE(research_run_id, domain))",
                     "CREATE TABLE IF NOT EXISTS opportunity_scores (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, score_version TEXT NOT NULL, opportunity_score REAL NOT NULL, coverage_factor REAL NOT NULL, recommendation TEXT NOT NULL, alerts TEXT NOT NULL, exclusions TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(research_run_id))",
                     "CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, format TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL)",
+                    "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, tier TEXT NOT NULL DEFAULT 'free', created_at TEXT NOT NULL)",
+                    "CREATE TABLE IF NOT EXISTS usage_counters (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, period TEXT NOT NULL, run_count INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, period))",
                 ]
                 for stmt in statements:
                     self._execute(db, stmt)
@@ -287,6 +289,22 @@ class ResearchStore:
                         format TEXT NOT NULL,
                         payload TEXT NOT NULL,
                         created_at TEXT NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS users (
+                        id TEXT PRIMARY KEY,
+                        email TEXT NOT NULL UNIQUE,
+                        password_hash TEXT NOT NULL,
+                        tier TEXT NOT NULL DEFAULT 'free',
+                        created_at TEXT NOT NULL
+                    );
+
+                    CREATE TABLE IF NOT EXISTS usage_counters (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        period TEXT NOT NULL,
+                        run_count INTEGER NOT NULL DEFAULT 0,
+                        UNIQUE(user_id, period)
                     );
                     """
                 )
@@ -832,6 +850,73 @@ class ResearchStore:
                 """,
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def create_user(self, *, email: str, password_hash: str, tier: str = "free") -> dict[str, Any]:
+        user_id = f"usr_{uuid.uuid4().hex}"
+        created_at = _now()
+        with self._transaction() as db:
+            self._execute(db,
+                "INSERT INTO users (id, email, password_hash, tier, created_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, email, password_hash, tier, created_at),
+            )
+        return self.get_user_by_id(user_id)  # type: ignore[return-value]
+
+    def get_user_by_email(self, email: str) -> dict[str, Any] | None:
+        with self._transaction() as db:
+            row = self._execute(db, "SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        return dict(row) if row else None
+
+    def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
+        with self._transaction() as db:
+            row = self._execute(db, "SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+    def set_user_tier(self, user_id: str, tier: str) -> dict[str, Any] | None:
+        with self._transaction() as db:
+            self._execute(db, "UPDATE users SET tier=? WHERE id=?", (tier, user_id))
+        return self.get_user_by_id(user_id)
+
+    def get_and_increment_usage(self, *, user_id: str, period: str, limit: int | None) -> int | None:
+        """Atomically increments and returns the new run_count, or returns None
+        (without incrementing) if the increment would exceed `limit`. The
+        increment is a single conditional UPDATE (not read-then-write in
+        Python) so concurrent requests near the limit can't both slip through."""
+        counter_id = f"uc_{uuid.uuid4().hex}"
+        with self._transaction() as db:
+            if self._backend == "postgresql":
+                self._execute(db,
+                    "INSERT INTO usage_counters (id, user_id, period, run_count) VALUES (?, ?, ?, 0) "
+                    "ON CONFLICT (user_id, period) DO NOTHING",
+                    (counter_id, user_id, period),
+                )
+            else:
+                self._execute(db,
+                    "INSERT OR IGNORE INTO usage_counters (id, user_id, period, run_count) VALUES (?, ?, ?, 0)",
+                    (counter_id, user_id, period),
+                )
+            if limit is None:
+                cursor = self._execute(db,
+                    "UPDATE usage_counters SET run_count = run_count + 1 WHERE user_id=? AND period=?",
+                    (user_id, period),
+                )
+            else:
+                cursor = self._execute(db,
+                    "UPDATE usage_counters SET run_count = run_count + 1 WHERE user_id=? AND period=? AND run_count < ?",
+                    (user_id, period, limit),
+                )
+            if cursor.rowcount != 1:
+                return None
+            row = self._execute(
+                db, "SELECT run_count FROM usage_counters WHERE user_id=? AND period=?", (user_id, period)
+            ).fetchone()
+        return row["run_count"]
+
+    def get_usage(self, *, user_id: str, period: str) -> int:
+        with self._transaction() as db:
+            row = self._execute(
+                db, "SELECT run_count FROM usage_counters WHERE user_id=? AND period=?", (user_id, period)
+            ).fetchone()
+        return row["run_count"] if row else 0
 
     def get_quota_usage(self) -> list[dict[str, Any]]:
         with self._transaction() as db:
