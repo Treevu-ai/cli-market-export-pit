@@ -99,11 +99,21 @@ $env:PYTHONPATH = "src"
 python scripts/demo_arandano.py
 ```
 
-## Landing comercial
+## Frontend
 
-Frontend en `web/` (diseño wireframe v1.0): landing + consola de análisis conectada a la API PIT. El servidor FastAPI sirve los archivos estáticos en `/`.
+Frontend en `web-next/` — Next.js 15 (App Router) con export estático, Tailwind v4 y componentes shadcn/Radix, tema Deep Tech Blue/Teal. Tres páginas: landing (`/`), consola de análisis (`/analyze/`) y visor de reporte (`/report/?run_id=...`), todas consumiendo la API PIT vía `lib/pit-api.ts`.
 
-Borrador anterior en `landing/index.html`.
+**Desarrollo local:**
+
+```powershell
+cd web-next
+npm install
+npm run dev        # http://localhost:3000, apunta a la API con window.PIT_API_BASE si corre en otro puerto
+```
+
+**Build de producción** (`npm run build`) genera export estático en `web-next/out/` — sin servidor Node en producción. El `Dockerfile` compila este export en un stage Node y copia el resultado a `web/` dentro de la imagen final; el servidor FastAPI lo sirve como estáticos en `/`, igual que antes. Por eso mismo origin sirve API y frontend en producción, sin configuración de CORS.
+
+Reemplaza el frontend vanilla JS/HTML anterior (ver `docs/academy_narrative_prd.md` y el historial de commits para el contexto de la migración). Borrador original en `landing/index.html`.
 
 ## Product Intelligence (agentes)
 

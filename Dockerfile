@@ -1,3 +1,13 @@
+FROM node:22-slim AS web-builder
+
+WORKDIR /web
+
+COPY web-next/package.json web-next/package-lock.json ./
+RUN npm ci
+
+COPY web-next/ .
+RUN npm run build
+
 FROM python:3.14-slim AS builder
 
 WORKDIR /app
@@ -22,7 +32,7 @@ RUN groupadd -r pit && useradd -r -g pit -d /app pit
 
 COPY --from=builder /root/.local /home/pit/.local
 COPY src/ src/
-COPY web/ web/
+COPY --from=web-builder /web/out/ web/
 COPY assets/ assets/
 
 RUN chown -R pit:pit /app /home/pit

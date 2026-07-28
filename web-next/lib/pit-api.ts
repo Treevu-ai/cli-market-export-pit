@@ -1,0 +1,179 @@
+/** PIT API client — TypeScript port of web/js/pit-api.js */
+
+declare global {
+  interface Window {
+    PIT_API_BASE?: string;
+    PIT_API_KEY?: string;
+  }
+}
+
+export function getApiBase(): string {
+  if (typeof window === "undefined") return "";
+  if (window.PIT_API_BASE) return window.PIT_API_BASE.replace(/\/$/, "");
+  if (window.location.protocol === "file:") return "http://127.0.0.1:8000";
+  return window.location.origin.replace(/\/$/, "");
+}
+
+export async function pitRequest<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...((options.headers as Record<string, string>) || {}),
+  };
+  if (typeof window !== "undefined" && window.PIT_API_KEY) {
+    headers["X-API-Key"] = window.PIT_API_KEY;
+  }
+  const response = await fetch(`${getApiBase()}${path}`, { ...options, headers });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload.detail || payload.message || response.statusText;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return payload as T;
+}
+
+export interface RunFullPipelineBody {
+  query: string;
+  target_market: string;
+  application: string;
+  limit: number;
+  hs_code?: string;
+}
+
+export interface DomainScore {
+  score: number;
+  confidence?: string;
+  weight?: number;
+  coverage?: number;
+}
+
+export interface ScoreBlock {
+  score_version: string;
+  opportunity_score: number;
+  coverage_factor: number;
+  recommendation: string;
+  dimensions: Record<string, DomainScore>;
+  alerts: string[];
+  exclusions?: string[];
+}
+
+export interface ChecklistItem {
+  priority: "high" | "medium" | "low";
+  title: string;
+  action: string;
+}
+
+export interface SourceEntry {
+  source: string;
+  request_url: string;
+  checksum: string | null;
+  status: string;
+  http_status?: number | null;
+}
+
+export interface ReportData {
+  run_id: string;
+  query: string;
+  target_market: string;
+  application: string;
+  cutoff_at: string;
+  score: ScoreBlock;
+  improvement_checklist: ChecklistItem[];
+  evidence_summary: Record<string, any>;
+  claims: unknown[];
+  sources: SourceEntry[];
+}
+
+export interface RunSummary {
+  id: string;
+  status: string;
+}
+
+export async function runFullPipeline(body: RunFullPipelineBody): Promise<RunSummary> {
+  const envelope = await pitRequest<{ data: RunSummary }>("/v1/research-runs/full", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return envelope.data;
+}
+
+export async function fetchReport(runId: string): Promise<ReportData> {
+  const envelope = await pitRequest<{ data: ReportData }>(`/v1/research-runs/${runId}/report`);
+  return envelope.data;
+}
+
+export interface AgentsStatus {
+  ficha_available?: boolean;
+  reason?: string;
+  anthropic_configured?: boolean;
+}
+
+export async function fetchAgentsStatus(): Promise<AgentsStatus> {
+  const envelope = await pitRequest<{ data: AgentsStatus }>("/v1/agents/status");
+  return envelope.data;
+}
+
+export interface FichaResult {
+  dossier_markdown: string;
+}
+
+export async function generateFicha(
+  runId: string,
+  body: { segment?: string; stage?: string } = {},
+): Promise<FichaResult> {
+  const envelope = await pitRequest<{ data: FichaResult }>(`/v1/research-runs/${runId}/ficha`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return envelope.data;
+}
+
+export function reportPdfUrl(runId: string): string {
+  return `${getApiBase()}/v1/research-runs/${runId}/report.pdf`;
+}
+
+export const RECOMMENDATION_LABELS: Record<string, { label: string; tone: "go" | "conditional" | "flag" | "insufficient" }> = {
+  Investigate: { label: "Investigar", tone: "go" },
+  Validate: { label: "Validar", tone: "conditional" },
+  Deprioritize: { label: "Depriorizar", tone: "insufficient" },
+  "Insufficient evidence": { label: "Evidencia insuficiente", tone: "flag" },
+};
+
+export const MARKET_COVERAGE: Record<string, { tier: "strong" | "partial" | "none"; note: string }> = {
+  PE: { tier: "strong", note: "Cobertura fuerte de CLI Market — multi-tienda, validada con productos agro/frescos." },
+  MX: { tier: "strong", note: "Cobertura fuerte de CLI Market — multi-tienda, validada con productos agro/frescos." },
+  AR: { tier: "strong", note: "Cobertura fuerte de CLI Market — multi-tienda, validada con productos agro/frescos." },
+  CO: { tier: "partial", note: "Cobertura parcial de CLI Market — una tienda verificada." },
+  BR: { tier: "partial", note: "Cobertura parcial de CLI Market — una tienda verificada." },
+  US: { tier: "none", note: "Sin datos de góndola de CLI Market para categorías agro/frescos (catálogo orientado a DTC/wellness)." },
+  CL: { tier: "none", note: "Sin datos de góndola de CLI Market confirmados para categorías agro/frescos." },
+};
+
+export interface RecentRun {
+  id: string;
+  query: string;
+  target_market: string;
+  score: number | null;
+}
+
+const RECENT_RUNS_KEY = "pit_recent_runs";
+const RECENT_RUNS_MAX = 8;
+
+export function loadRecentRuns(): RecentRun[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(RECENT_RUNS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+export function saveRecentRun(entry: RecentRun): RecentRun[] {
+  const runs = loadRecentRuns().filter((run) => run.id !== entry.id);
+  runs.unshift(entry);
+  const trimmed = runs.slice(0, RECENT_RUNS_MAX);
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(RECENT_RUNS_KEY, JSON.stringify(trimmed));
+  }
+  return trimmed;
+}

@@ -19,3 +19,6 @@ venv
 .env
 .env.*
 *.log
+web-next/node_modules
+web-next/.next
+web-next/out
