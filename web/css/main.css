@@ -445,11 +445,28 @@ textarea {
 }
 
 .hero-visual {
+  position: relative;
+  overflow: hidden;
   padding: 1.25rem;
   border-radius: var(--radius-lg);
   background: linear-gradient(145deg, #0b0d0c 0%, #1a211c 100%);
   color: var(--text-on-dark);
   box-shadow: var(--shadow-float);
+}
+
+.hero-visual-art {
+  position: absolute;
+  top: -8%;
+  right: -14%;
+  width: 62%;
+  height: auto;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.hero-visual > *:not(.hero-visual-art) {
+  position: relative;
+  z-index: 1;
 }
 
 .hero-visual-header {
