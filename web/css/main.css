@@ -504,21 +504,52 @@ textarea {
 
 /* Proof strip */
 .proof-strip {
-  padding: 1.25rem 0 2rem;
+  padding: 1.75rem 0 2.25rem;
   border-bottom: 1px solid var(--border-default);
 }
 
-.proof-strip p {
-  margin: 0 0 1rem;
-  color: var(--text-secondary);
-  font-size: 0.95rem;
+.proof-eyebrow {
+  margin: 0 0 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--green-dark);
 }
 
-.proof-chips {
+.proof-bar {
   display: flex;
-  gap: 0.65rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
   overflow-x: auto;
   padding-bottom: 0.25rem;
+}
+
+.proof-bar span {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  padding: 0 1rem;
+  opacity: 0.75;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.proof-bar span:hover {
+  opacity: 1;
+  color: var(--text-primary);
+}
+
+.proof-bar span:not(:last-child) {
+  border-right: 1px solid var(--border-default);
+}
+
+.proof-bar span:first-child {
+  padding-left: 0;
 }
 
 /* Sections */
