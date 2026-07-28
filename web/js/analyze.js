@@ -306,6 +306,38 @@ function renderReport(report) {
   resultsContent?.classList.remove("hidden");
 }
 
+const MARKET_COVERAGE = {
+  PE: { tier: "strong", note: "Cobertura fuerte de CLI Market — multi-tienda, validada con productos agro/frescos." },
+  MX: { tier: "strong", note: "Cobertura fuerte de CLI Market — multi-tienda, validada con productos agro/frescos." },
+  AR: { tier: "strong", note: "Cobertura fuerte de CLI Market — multi-tienda, validada con productos agro/frescos." },
+  CO: { tier: "partial", note: "Cobertura parcial de CLI Market — una tienda verificada." },
+  BR: { tier: "partial", note: "Cobertura parcial de CLI Market — una tienda verificada." },
+  US: { tier: "none", note: "Sin datos de góndola de CLI Market para categorías agro/frescos (catálogo orientado a DTC/wellness)." },
+  CL: { tier: "none", note: "Sin datos de góndola de CLI Market confirmados para categorías agro/frescos." },
+};
+
+const COVERAGE_TIER_COLOR = {
+  strong: "var(--success-teal)",
+  partial: "var(--warning-gold)",
+  none: "var(--text-secondary)",
+};
+
+function updateCoverageNote() {
+  const marketSelect = document.getElementById("target_market");
+  const note = document.getElementById("market-coverage-note");
+  if (!marketSelect || !note) return;
+  const info = MARKET_COVERAGE[marketSelect.value];
+  if (info) {
+    note.textContent = `● ${info.note}`;
+    note.style.color = COVERAGE_TIER_COLOR[info.tier];
+  } else {
+    note.textContent = "Cobertura de precio de góndola (CLI Market) aún no medida para este mercado.";
+    note.style.color = "var(--text-secondary)";
+  }
+}
+
+document.getElementById("target_market")?.addEventListener("change", updateCoverageNote);
+
 function prefillFromQuery() {
   const params = new URLSearchParams(window.location.search);
   const query = params.get("query");
@@ -316,6 +348,7 @@ function prefillFromQuery() {
 
 prefillFromQuery();
 renderRecentRuns();
+updateCoverageNote();
 
 document.querySelectorAll(".preset-btn").forEach((button) => {
   button.addEventListener("click", () => {
@@ -323,6 +356,7 @@ document.querySelectorAll(".preset-btn").forEach((button) => {
     const marketSelect = document.getElementById("target_market");
     if (queryInput && button.dataset.query) queryInput.value = button.dataset.query;
     if (marketSelect && button.dataset.market) marketSelect.value = button.dataset.market;
+    updateCoverageNote();
   });
 });
 
