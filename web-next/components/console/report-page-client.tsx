@@ -4,8 +4,12 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { fetchAgentsStatus, fetchReport, generateFicha, type ReportData } from "@/lib/pit-api";
 import { ReportView } from "./report-view";
+import { useLocale } from "@/lib/i18n/locale-context";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
 
 export function ReportPageClient() {
+  const { t } = useLocale();
   const searchParams = useSearchParams();
   const runId = searchParams.get("run_id");
 
@@ -35,23 +39,27 @@ export function ReportPageClient() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-foreground/10 bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-4 lg:px-12">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-y-2 px-6 py-4 lg:px-12">
           <a href="/" className="flex items-center gap-2">
             <span className="font-display text-xl">CLI MARKET</span>
             <span className="font-mono text-xs text-muted-foreground">PIT</span>
           </a>
-          <a href="/analyze/" className="text-sm text-muted-foreground hover:text-foreground">
-            ◂ Consola
-          </a>
+          <div className="flex flex-wrap items-center gap-4">
+            <a href="/analyze/" className="text-sm text-muted-foreground hover:text-foreground">
+              {t("console.backToConsole")}
+            </a>
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
       <div className="mx-auto max-w-[1000px] px-6 py-10 lg:px-12">
         {!runId && (
           <div className="border border-dashed border-foreground/15 p-16 text-center text-muted-foreground">
-            <p className="font-medium">Sin run_id.</p>
+            <p className="font-medium">{t("console.noRunId")}</p>
             <p className="mt-1 text-sm">
-              Abre este reporte desde la consola (<code>/report/?run_id=…</code>) o generá un análisis nuevo.
+              {t("console.noRunIdDetail")}
             </p>
           </div>
         )}

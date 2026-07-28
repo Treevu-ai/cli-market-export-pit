@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Grape, FlaskConical, Wheat, Leaf, Citrus, Sprout, Coffee, Wine, Pill, Cherry, Nut, Flower2 } from "lucide-react";
+import { useLocale } from "@/lib/i18n/locale-context";
 
 const integrations = [
   { name: "Arándano", category: "PE→US", query: "arándano orgánico", market: "US", Icon: Grape },
@@ -22,6 +23,7 @@ const integrations = [
 ];
 
 export function IntegrationsSection() {
+  const { t } = useLocale();
   const [isVisible, setIsVisible] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
@@ -48,22 +50,22 @@ export function IntegrationsSection() {
           isVisible ? "opacity-100" : "opacity-0"
         }`}>
           <span className="w-12 h-px bg-foreground/20" />
-          Categorías
+          {t("integrations.eyebrow")}
           <span className="w-12 h-px bg-foreground/20" />
         </span>
 
         <h2 className={`text-6xl md:text-7xl lg:text-[128px] font-display tracking-tight leading-[0.9] transition-all duration-1000 ${
           isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
         }`}>
-          Productos
+          {t("integrations.headline")}
           <br />
-          <span className="text-muted-foreground">analizables.</span>
+          <span className="text-muted-foreground">{t("integrations.headlineAccent")}</span>
         </h2>
 
         <p className={`mt-8 text-xl text-muted-foreground leading-relaxed max-w-lg mx-auto transition-all duration-1000 delay-100 ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}>
-          Casos con cobertura real hoy. Elige una categoría y lanza el análisis directo.
+          {t("integrations.lead")}
         </p>
       </div>
 
@@ -122,7 +124,7 @@ export function IntegrationsSection() {
                 <integration.Icon className="w-6 h-6" />
               </div>
 
-              <span className="font-medium block">{integration.name}</span>
+              <span className="font-medium block">{t(`integrations.names.${integration.name}`)}</span>
 
               {/* Animated underline */}
               <div className="absolute bottom-0 left-0 right-0 h-px bg-foreground/20 overflow-hidden">
@@ -140,9 +142,9 @@ export function IntegrationsSection() {
         }`}>
           <div className="flex flex-wrap gap-12">
             {[
-              { value: String(integrations.length), label: "Categorías con caso real" },
-              { value: "ISO-2", label: "Cualquier mercado destino" },
-              { value: "Español/Inglés", label: "Consulta libre" },
+              { value: String(integrations.length), label: t("integrations.statCategoriesLabel") },
+              { value: "ISO-2", label: t("integrations.statMarketLabel") },
+              { value: t("integrations.statQueryValue"), label: t("integrations.statQueryLabel") },
             ].map((stat) => (
               <div key={stat.label} className="flex items-baseline gap-3">
                 <span className="text-3xl font-display">{stat.value}</span>
@@ -152,7 +154,7 @@ export function IntegrationsSection() {
           </div>
 
           <a href="/analyze/" className="group inline-flex items-center gap-2 text-sm font-mono text-muted-foreground hover:text-foreground transition-colors">
-            Analizar otro producto
+            {t("integrations.otherProduct")}
             <span className="group-hover:translate-x-1 transition-transform">&rarr;</span>
           </a>
         </div>

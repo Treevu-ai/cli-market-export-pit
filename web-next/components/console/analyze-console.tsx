@@ -17,34 +17,37 @@ import {
   type RecentRun,
 } from "@/lib/pit-api";
 import { ReportView } from "./report-view";
+import { useLocale } from "@/lib/i18n/locale-context";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { LanguageToggle } from "@/components/language-toggle";
+import { es } from "@/lib/i18n/dictionaries/es";
+import { en } from "@/lib/i18n/dictionaries/en";
 
-const MARKETS = [
-  { code: "US", name: "Estados Unidos" },
-  { code: "PE", name: "Perú" },
-  { code: "MX", name: "México" },
-  { code: "CL", name: "Chile" },
-  { code: "CO", name: "Colombia" },
-  { code: "AR", name: "Argentina" },
-  { code: "BR", name: "Brasil" },
-  { code: "EU", name: "Unión Europea" },
+const SESSION_BAR_BY_LOCALE = { es: es.console.sessionBar, en: en.console.sessionBar };
+const QUOTA_NOTICE_BY_LOCALE = { es: es.console.quotaNotice, en: en.console.quotaNotice };
+const MARKETS_BY_LOCALE = { es: es.console.form.markets, en: en.console.form.markets };
+const PRESETS_BY_LOCALE = { es: es.console.form.presets, en: en.console.form.presets };
+
+const PRESET_QUERIES = [
+  { query: "arándano orgánico", market: "US" },
+  { query: "palta hass", market: "US" },
+  { query: "cacao alto flavanol", market: "US" },
+  { query: "quinua orgánica", market: "EU" },
+  { query: "mango kent", market: "US" },
 ];
-
-const PRESETS = [
-  { label: "Arándano → US", query: "arándano orgánico", market: "US" },
-  { label: "Palta → US", query: "palta hass", market: "US" },
-  { label: "Cacao → US", query: "cacao alto flavanol", market: "US" },
-  { label: "Quinua → EU", query: "quinua orgánica", market: "EU" },
-  { label: "Mango → US", query: "mango kent", market: "US" },
-];
-
-const STATUS_LABEL: Record<string, { label: string; className: string }> = {
-  idle: { label: "Listo", className: "bg-foreground/10 text-muted-foreground" },
-  running: { label: "Ejecutando…", className: "bg-[#ffd700]/15 text-[#ffd700]" },
-  done: { label: "Completado", className: "bg-[#64ffda]/15 text-[#64ffda]" },
-  error: { label: "Error", className: "bg-[#e11d48]/15 text-[#e11d48]" },
-};
 
 export function AnalyzeConsole() {
+  const { t, locale } = useLocale();
+  const sessionBar = SESSION_BAR_BY_LOCALE[locale];
+  const quotaNoticeText = QUOTA_NOTICE_BY_LOCALE[locale];
+  const MARKETS = MARKETS_BY_LOCALE[locale];
+  const PRESETS = PRESETS_BY_LOCALE[locale];
+  const STATUS_LABEL: Record<string, { label: string; className: string }> = {
+    idle: { label: t("console.status.idle"), className: "bg-foreground/10 text-muted-foreground" },
+    running: { label: t("console.status.running"), className: "bg-[#ffd700]/15 text-[#ffd700]" },
+    done: { label: t("console.status.done"), className: "bg-[#64ffda]/15 text-[#64ffda]" },
+    error: { label: t("console.status.error"), className: "bg-[#e11d48]/15 text-[#e11d48]" },
+  };
   const searchParams = useSearchParams();
 
   const [query, setQuery] = useState("");
@@ -137,18 +140,20 @@ export function AnalyzeConsole() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-foreground/10 bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-4 lg:px-12">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-y-2 px-6 py-4 lg:px-12">
           <a href="/" className="flex items-center gap-2">
             <span className="font-display text-xl">CLI MARKET</span>
             <span className="font-mono text-xs text-muted-foreground">PIT</span>
           </a>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className={`rounded-full px-3 py-1 font-mono text-xs ${statusInfo.className}`}>
               {statusInfo.label}
             </span>
             <a href="https://cli-market-pit-backend.fly.dev/docs" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground hover:text-foreground">
-              API Docs
+              {t("common.apiDocs")}
             </a>
+            <LanguageToggle />
+            <ThemeToggle />
           </div>
         </div>
       </header>
@@ -158,49 +163,53 @@ export function AnalyzeConsole() {
         <aside className="space-y-6">
           {sessionChecked && !session && (
             <div className="border border-foreground/10 bg-foreground/[0.02] p-6 text-sm">
-              <h2 className="font-display text-lg">Inicia sesión para analizar</h2>
+              <h2 className="font-display text-lg">{t("console.inicioSesion.title")}</h2>
               <p className="mt-2 text-muted-foreground">
-                Crea una cuenta gratis (5 análisis/mes) para ejecutar el pipeline completo.
+                {t("console.inicioSesion.description")}
               </p>
               <div className="mt-4 flex gap-3">
                 <a href="/signup" className="rounded-full bg-[#64ffda] px-4 py-2 text-xs font-medium text-[#0a192f]">
-                  Crear cuenta
+                  {t("console.inicioSesion.createAccount")}
                 </a>
                 <a href="/login" className="rounded-full border border-foreground/20 px-4 py-2 text-xs">
-                  Ya tengo cuenta
+                  {t("console.inicioSesion.haveAccount")}
                 </a>
               </div>
             </div>
           )}
           {session && (
             <div className="border border-foreground/10 bg-foreground/[0.02] p-4 text-xs text-muted-foreground">
-              {session.email} · plan {session.tier} · {session.usage.used}
-              {session.usage.limit !== null ? `/${session.usage.limit}` : ""} análisis este mes
+              {sessionBar(
+                session.email,
+                session.tier,
+                session.usage.used,
+                session.usage.limit !== null ? `/${session.usage.limit}` : ""
+              )}
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-5 border border-foreground/10 bg-foreground/[0.02] p-6">
-            <h2 className="font-display text-lg">Nueva consulta</h2>
+            <h2 className="font-display text-lg">{t("console.form.title")}</h2>
 
             <div>
               <label className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                Producto / consulta
+                {t("console.form.queryLabel")}
               </label>
               <input
                 required
                 minLength={3}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="ej. arándano orgánico, palta hass, cacao alto flavanol"
+                placeholder={t("console.form.queryPlaceholder")}
                 className="w-full border border-foreground/20 bg-transparent px-3 py-2 text-sm"
               />
               <div className="mt-2 flex flex-wrap gap-2">
-                {PRESETS.map((p) => (
+                {PRESETS.map((p, i) => (
                   <button
                     key={p.label}
                     type="button"
                     onClick={() => {
-                      setQuery(p.query);
-                      setTargetMarket(p.market);
+                      setQuery(PRESET_QUERIES[i].query);
+                      setTargetMarket(PRESET_QUERIES[i].market);
                     }}
                     className="rounded-full border border-foreground/15 px-3 py-1 text-xs text-muted-foreground hover:border-[#64ffda]/60 hover:text-[#64ffda]"
                   >
@@ -212,7 +221,7 @@ export function AnalyzeConsole() {
 
             <div>
               <label className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                Mercado (ISO)
+                {t("console.form.marketLabel")}
               </label>
               <select
                 value={targetMarket}
@@ -234,13 +243,13 @@ export function AnalyzeConsole() {
                       : "text-muted-foreground"
                 }`}
               >
-                {coverage ? `● ${coverage.note}` : "Cobertura de precio de góndola (CLI Market) aún no medida para este mercado."}
+                {coverage ? `● ${coverage.note}` : t("console.form.coverageUnmeasured")}
               </p>
             </div>
 
             <div>
               <label className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                Aplicación
+                {t("console.form.applicationLabel")}
               </label>
               <input
                 value={application}
@@ -252,7 +261,7 @@ export function AnalyzeConsole() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                  Límite por fuente
+                  {t("console.form.limitLabel")}
                 </label>
                 <input
                   type="number"
@@ -265,7 +274,7 @@ export function AnalyzeConsole() {
               </div>
               <div>
                 <label className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                  HS code
+                  {t("console.form.hsCodeLabel")}
                 </label>
                 <input
                   value={hsCode}
@@ -281,14 +290,14 @@ export function AnalyzeConsole() {
               disabled={status === "running" || (sessionChecked && !session)}
               className="w-full rounded-full bg-[#64ffda] px-5 py-3 text-sm font-medium text-[#0a192f] transition-opacity disabled:opacity-40"
             >
-              {status === "running" ? "Ejecutando pipeline…" : "Ejecutar pipeline completo"}
+              {status === "running" ? t("console.form.submitRunning") : t("console.form.submitIdle")}
             </button>
           </form>
 
           {recentRuns.length > 0 && (
             <div className="border border-foreground/10 bg-foreground/[0.02] p-6">
               <h3 className="mb-3 font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                Runs recientes
+                {t("console.recentRuns")}
               </h3>
               <div className="space-y-2">
                 {recentRuns.map((run) => (
@@ -312,9 +321,9 @@ export function AnalyzeConsole() {
         <main>
           {quotaNotice && (
             <div className="mb-6 border border-[#ffd700]/30 bg-[#ffd700]/10 p-4 text-sm text-[#ffd700]">
-              Llegaste al límite de tu plan {quotaNotice.tier} ({quotaNotice.limit} análisis/mes).{" "}
+              {quotaNoticeText(quotaNotice.tier, quotaNotice.limit ?? 0)}{" "}
               <a href={quotaNotice.upgradeUrl} className="underline">
-                Ver planes
+                {t("console.viewPlans")}
               </a>
             </div>
           )}
@@ -327,8 +336,8 @@ export function AnalyzeConsole() {
             <ReportView report={report} fichaAvailable={fichaAvailable} onGenerateFicha={handleGenerateFicha} />
           ) : (
             <div className="border border-dashed border-foreground/15 p-16 text-center text-muted-foreground">
-              <p className="font-medium">Sin resultados aún.</p>
-              <p className="mt-1 text-sm">Ejecuta un pipeline completo para ver score, dominios y evidencia trazable.</p>
+              <p className="font-medium">{t("console.noResults")}</p>
+              <p className="mt-1 text-sm">{t("console.noResultsDetail")}</p>
             </div>
           )}
         </main>

@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { signup } from "@/lib/pit-api";
+import { useLocale } from "@/lib/i18n/locale-context";
 
 export function SignupForm() {
+  const { t } = useLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -24,14 +26,14 @@ export function SignupForm() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
-      <h1 className="font-display text-3xl">Crea tu cuenta</h1>
+      <h1 className="font-display text-3xl">{t("auth.signupTitle")}</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Plan gratis: 5 análisis por mes. Sin tarjeta de crédito.
+        {t("auth.signupSubtitle")}
       </p>
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
         <div>
           <label className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted-foreground">
-            Email
+            {t("auth.email")}
           </label>
           <input
             type="email"
@@ -43,7 +45,7 @@ export function SignupForm() {
         </div>
         <div>
           <label className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted-foreground">
-            Contraseña (mínimo 8 caracteres)
+            {t("auth.passwordMin")}
           </label>
           <input
             type="password"
@@ -60,13 +62,13 @@ export function SignupForm() {
           disabled={submitting}
           className="w-full rounded-full bg-[#64ffda] px-5 py-3 text-sm font-medium text-[#0a192f] transition-opacity disabled:opacity-40"
         >
-          {submitting ? "Creando cuenta…" : "Crear cuenta gratis"}
+          {submitting ? t("auth.creatingAccount") : t("auth.createFreeAccount")}
         </button>
       </form>
       <p className="mt-6 text-sm text-muted-foreground">
-        ¿Ya tienes cuenta?{" "}
+        {t("auth.haveAccount")}{" "}
         <a href="/login" className="text-[#64ffda] hover:underline">
-          Inicia sesión
+          {t("auth.signIn")}
         </a>
       </p>
     </div>

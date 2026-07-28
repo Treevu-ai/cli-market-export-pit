@@ -1,29 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "@/lib/i18n/locale-context";
+import { es } from "@/lib/i18n/dictionaries/es";
+import { en } from "@/lib/i18n/dictionaries/en";
 
-const steps = [
-  {
-    number: "01",
-    title: "Ciencia",
-    subtitle: "respaldo real",
-    description: "Identificamos respaldo científico, tendencias y vacíos: publicaciones y citas, patentes y tecnología, claims defendibles.",
-  },
-  {
-    number: "02",
-    title: "Mercado",
-    subtitle: "competencia real",
-    description: "Contrastamos con productos, precios y retailers reales: góndola y competencia, comercio exterior, señales de tendencia.",
-  },
-  {
-    number: "03",
-    title: "Formulación",
-    subtitle: "producto competitivo",
-    description: "Traducimos evidencia en arquitectura de producto: ingredientes y claims, formato y precio, diferenciación real.",
-  },
-];
+const STEPS_BY_LOCALE = { es: es.howItWorks.steps, en: en.howItWorks.steps };
 
 export function HowItWorksSection() {
+  const { t, locale } = useLocale();
+  const steps = STEPS_BY_LOCALE[locale];
   const [activeStep, setActiveStep] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -62,16 +48,16 @@ export function HowItWorksSection() {
             <div className={`transition-all duration-1000 ${isVisible ? "translate-x-0 opacity-100" : "-translate-x-12 opacity-0"}`}>
               <span className="inline-flex items-center gap-3 text-sm font-mono text-white/40 mb-8">
                 <span className="w-12 h-px bg-white/20" />
-                Tres capas de evidencia
+                {t("howItWorks.eyebrow")}
               </span>
             </div>
 
             <h2 className={`text-6xl md:text-7xl lg:text-[128px] font-display tracking-tight leading-[0.85] transition-all duration-1000 delay-100 ${
               isVisible ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"
             }`}>
-              <span className="block">Ciencia.</span>
-              <span className="block text-white/30">Mercado.</span>
-              <span className="block text-white/10">Formulación.</span>
+              <span className="block">{t("howItWorks.headline.0")}</span>
+              <span className="block text-white/30">{t("howItWorks.headline.1")}</span>
+              <span className="block text-white/10">{t("howItWorks.headline.2")}</span>
             </h2>
           </div>
         </div>

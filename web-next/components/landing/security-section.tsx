@@ -2,33 +2,18 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Shield, Lock, Eye, FileCheck } from "lucide-react";
+import { useLocale } from "@/lib/i18n/locale-context";
 
-const securityFeatures = [
-  {
-    icon: FileCheck,
-    title: "Checksum por respuesta",
-    description: "Cada fuente queda registrada con checksum SHA-256, verificable.",
-  },
-  {
-    icon: Eye,
-    title: "Cobertura declarada",
-    description: "Mostramos qué mercados tienen datos reales y cuáles no — sin fingir cobertura.",
-  },
-  {
-    icon: Shield,
-    title: "Fuentes auditables",
-    description: "Cada claim cita su fuente original, no un resumen genérico.",
-  },
-  {
-    icon: Lock,
-    title: "Fallos trazados",
-    description: "Si una fuente falla, queda registrado como fallo — nunca se oculta en silencio.",
-  },
-];
-
-const licenses = ["OpenAlex CC0", "Crossref REST", "CLI Market — atribución", "SHA-256 por fuente"];
+const FEATURE_ICONS = [FileCheck, Eye, Shield, Lock];
 
 export function SecuritySection() {
+  const { t, tList } = useLocale();
+  const securityFeatures = FEATURE_ICONS.map((icon, i) => ({
+    icon,
+    title: t(`security.features.${i}.title`),
+    description: t(`security.features.${i}.description`),
+  }));
+  const licenses = tList("security.licenses");
   const [isVisible, setIsVisible] = useState(false);
   const [activeFeature, setActiveFeature] = useState(0);
   const sectionRef = useRef<HTMLElement>(null);
@@ -63,16 +48,16 @@ export function SecuritySection() {
             isVisible ? "opacity-100" : "opacity-0"
           }`}>
             <span className="w-12 h-px bg-foreground/20" />
-            Trazabilidad
+            {t("security.eyebrow")}
           </span>
 
           {/* Title — full width */}
           <h2 className={`text-6xl md:text-7xl lg:text-[128px] font-display tracking-tight leading-[0.9] mb-12 transition-all duration-1000 ${
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}>
-            Sin fingir
+            {t("security.headline")}
             <br />
-            <span className="text-muted-foreground">ser el IPC.</span>
+            <span className="text-muted-foreground">{t("security.headlineAccent")}</span>
           </h2>
 
           {/* Description — below title */}
@@ -80,8 +65,7 @@ export function SecuritySection() {
             isVisible ? "opacity-100" : "opacity-0"
           }`}>
             <p className="text-xl text-muted-foreground leading-relaxed max-w-2xl">
-              Un dato sin metadata de calidad no es inteligencia, es ruido. Cada respuesta queda
-              trazada — la buena y la que no alcanza.
+              {t("security.lead")}
             </p>
           </div>
         </div>
@@ -89,19 +73,19 @@ export function SecuritySection() {
         {/* Main content */}
         <div className="grid lg:grid-cols-12 gap-6">
           {/* Large visual card */}
-          <div className={`lg:col-span-7 relative p-8 lg:p-12 border border-foreground/10 min-h-[400px] overflow-hidden transition-all duration-700 ${
+          <div className={`lg:col-span-7 relative flex flex-col p-8 lg:p-12 border border-foreground/10 min-h-[400px] transition-all duration-700 ${
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}>
             <div className="relative z-10">
-              <span className="font-mono text-sm text-muted-foreground">Fase 1 de este mismo build</span>
+              <span className="font-mono text-sm text-muted-foreground">{t("security.phaseLabel")}</span>
               <div className="mt-8">
                 <span className="text-7xl lg:text-8xl font-display">0</span>
-                <span className="block text-muted-foreground mt-2">Fallos de fuente silenciados — cada error queda trazado</span>
+                <span className="block text-muted-foreground mt-2">{t("security.zeroLabel")}</span>
               </div>
             </div>
 
             {/* License badges */}
-            <div className="absolute bottom-8 left-8 right-8 flex flex-wrap gap-2">
+            <div className="mt-8 lg:mt-auto flex flex-wrap gap-2">
               {licenses.map((license, index) => (
                 <span
                   key={license}

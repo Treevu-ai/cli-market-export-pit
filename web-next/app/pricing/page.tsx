@@ -1,38 +1,34 @@
-const PLANS = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "",
-    limit: "5 análisis/mes",
-    features: ["Todas las fuentes públicas (ciencia, comercio exterior, tendencias)", "Historial de runs"],
-    cta: { label: "Crear cuenta gratis", href: "/signup" },
-  },
-  {
-    name: "Pro",
-    price: "$49",
-    period: "/mes",
-    limit: "50 análisis/mes",
-    features: ["Todo lo de Free", "Dominio Commerce (CLI Market Pro)", "Soporte prioritario"],
-    cta: { label: "Crear cuenta gratis", href: "/signup" },
-    highlighted: true,
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    period: "",
-    limit: "Volumen a medida",
-    features: ["Todo lo de Pro", "Integración con tu catálogo", "SLA y soporte dedicado"],
-    cta: { label: "Contáctanos", href: "mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Enterprise" },
-  },
+"use client";
+
+import { AppHeader } from "@/components/app-header";
+import { useLocale } from "@/lib/i18n/locale-context";
+import { es } from "@/lib/i18n/dictionaries/es";
+import { en } from "@/lib/i18n/dictionaries/en";
+
+const PLANS_BY_LOCALE = { es: es.pricing.plans, en: en.pricing.plans };
+
+const PLAN_HREFS = [
+  { href: "/signup" },
+  { href: "mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Pro", highlighted: true },
+  { href: "mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Enterprise" },
 ];
 
 export default function PricingPage() {
+  const { t, locale } = useLocale();
+  const plans = PLANS_BY_LOCALE[locale];
+  const PLANS = plans.map((plan, i) => ({
+    ...plan,
+    cta: { label: plan.cta, href: PLAN_HREFS[i].href },
+    highlighted: PLAN_HREFS[i].highlighted,
+  }));
   return (
-    <main className="min-h-screen bg-background px-6 py-24 text-foreground">
+    <>
+      <AppHeader />
+      <main className="min-h-screen bg-background px-6 py-24 text-foreground">
       <div className="mx-auto max-w-5xl text-center">
-        <h1 className="font-display text-4xl lg:text-5xl">Precios</h1>
+        <h1 className="font-display text-4xl lg:text-5xl">{t("pricing.title")}</h1>
         <p className="mt-4 text-muted-foreground">
-          Valida oportunidades de exportación antes de invertir. Cancela cuando quieras.
+          {t("pricing.subtitle")}
         </p>
       </div>
       <div className="mx-auto mt-16 grid max-w-5xl gap-6 md:grid-cols-3">
@@ -70,6 +66,7 @@ export default function PricingPage() {
           </div>
         ))}
       </div>
-    </main>
+      </main>
+    </>
   );
 }

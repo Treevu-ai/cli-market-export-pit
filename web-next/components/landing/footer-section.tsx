@@ -2,6 +2,7 @@
 
 import { ArrowUpRight } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useLocale } from "@/lib/i18n/locale-context";
 
 const footerLinks = {
   Producto: [
@@ -24,10 +25,7 @@ const footerLinks = {
   ],
 };
 
-const socialLinks = [
-  { name: "GitHub", href: "https://github.com/Treevu-ai/cli-market-export-pit" },
-  { name: "WhatsApp", href: "https://wa.me/51902126765" },
-];
+const socialLinks = [{ name: "WhatsApp", href: "https://wa.me/51902126765" }];
 
 function AnimatedWaveCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -86,6 +84,7 @@ function AnimatedWaveCanvas() {
 }
 
 export function FooterSection() {
+  const { t } = useLocale();
   return (
     <footer className="relative bg-black">
       {/* Animated wave banner */}
@@ -107,7 +106,7 @@ export function FooterSection() {
               </a>
 
               <p className="text-white/50 leading-relaxed mb-8 max-w-xs text-sm">
-                Motor PIT · evidencia científica y de mercado trazable para exportadores.
+                {t("footer.tagline")}
               </p>
 
               {/* Social Links */}
@@ -128,7 +127,9 @@ export function FooterSection() {
             {/* Link Columns */}
             {Object.entries(footerLinks).map(([title, links]) => (
               <div key={title}>
-                <h3 className="text-sm font-medium text-white mb-6">{title}</h3>
+                <h3 className="text-sm font-medium text-white mb-6">
+                  {t(`footer.columns.${title}`)}
+                </h3>
                 <ul className="space-y-4">
                   {links.map((link) => (
                     <li key={link.name}>
@@ -136,7 +137,7 @@ export function FooterSection() {
                         href={link.href}
                         className="text-sm text-white/40 hover:text-white transition-colors inline-flex items-center gap-2"
                       >
-                        {link.name}
+                        {t(`footer.links.${link.name}`)}
                       </a>
                     </li>
                   ))}
@@ -149,13 +150,13 @@ export function FooterSection() {
         {/* Bottom Bar */}
         <div className="py-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-white/30">
-            &copy; 2026 Treevu-ai · CLI Market Export Intelligence.
+            {t("footer.copyright")}
           </p>
 
           <div className="flex items-center gap-4 text-sm text-white/30">
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#64ffda] animate-pulse" />
-              Motor activo · evidencia trazable
+              {t("footer.engineStatus")}
             </span>
           </div>
         </div>

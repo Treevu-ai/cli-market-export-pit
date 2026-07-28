@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import { useLocale } from "@/lib/i18n/locale-context";
 
 export function CtaSection() {
+  const { t } = useLocale();
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -51,14 +53,13 @@ export function CtaSection() {
               {/* Left content */}
               <div className="flex-1">
                 <h2 className="text-6xl md:text-7xl lg:text-[72px] font-display tracking-tight mb-8 leading-[0.95]">
-                  Desarrolla primero
+                  {t("cta.headline")}
                   <br />
-                  la evidencia.
+                  {t("cta.headlineLine2")}
                 </h2>
 
                 <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-xl">
-                  Lanza un research run completo en minutos y decide con datos — el mismo
-                  motor que ya corrió el caso arándano arriba.
+                  {t("cta.lead")}
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -68,7 +69,7 @@ export function CtaSection() {
                     className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 h-14 text-base rounded-full group"
                   >
                     <a href="/signup/">
-                      Regístrate gratis
+                      {t("cta.signup")}
                       <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                     </a>
                   </Button>
@@ -78,7 +79,7 @@ export function CtaSection() {
                     variant="outline"
                     className="h-14 px-8 text-base rounded-full border-foreground/20 hover:bg-foreground/5"
                   >
-                    <a href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo">Solicita una demo</a>
+                    <a href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo">{t("cta.demo")}</a>
                   </Button>
                 </div>
               </div>

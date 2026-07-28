@@ -3,16 +3,14 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
+import { LanguageToggle } from "@/components/language-toggle";
+import { useLocale } from "@/lib/i18n/locale-context";
 
-const navLinks = [
-  { name: "Método",        href: "#features"      },
-  { name: "Caso real",     href: "#metrics"       },
-  { name: "Fuentes",       href: "#infra"          },
-  { name: "Categorías",    href: "#integrations"  },
-  { name: "Trazabilidad",  href: "#security"      },
-];
+const navHrefs = ["#features", "#metrics", "#infra", "#integrations", "#security"];
 
 export function Navigation() {
+  const { t, tList } = useLocale();
+  const navLinks = tList("nav.links").map((name, i) => ({ name, href: navHrefs[i] }));
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -67,20 +65,21 @@ export function Navigation() {
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
             <a href="/pricing" className={`transition-all duration-500 ${isScrolled ? "text-xs text-foreground/70 hover:text-foreground" : "text-sm text-white/70 hover:text-white"}`}>
-              Precios
+              {t("nav.pricing")}
             </a>
             <a href="/login" className={`transition-all duration-500 ${isScrolled ? "text-xs text-foreground/70 hover:text-foreground" : "text-sm text-white/70 hover:text-white"}`}>
-              Iniciar sesión
+              {t("nav.login")}
             </a>
             <a href="https://cli-market-pit-backend.fly.dev/docs" target="_blank" rel="noopener noreferrer" className={`transition-all duration-500 ${isScrolled ? "text-xs text-foreground/70 hover:text-foreground" : "text-sm text-white/70 hover:text-white"}`}>
-              API Docs
+              {t("nav.apiDocs")}
             </a>
+            <LanguageToggle />
             <Button
               asChild
               size="sm"
               className={`rounded-full transition-all duration-500 ${isScrolled ? "bg-primary hover:bg-primary/90 text-primary-foreground px-4 h-8 text-xs" : "bg-primary hover:bg-primary/90 text-primary-foreground px-6"}`}
             >
-              <a href="/signup/">Regístrate gratis</a>
+              <a href="/signup/">{t("nav.signupCta")}</a>
             </Button>
           </div>
 
@@ -143,14 +142,14 @@ export function Navigation() {
               className="flex-1 rounded-full h-14 text-base"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              <a href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo">Demo</a>
+              <a href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo">{t("nav.demo")}</a>
             </Button>
             <Button
               asChild
               className="flex-1 bg-primary text-primary-foreground rounded-full h-14 text-base"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              <a href="/signup/">Regístrate</a>
+              <a href="/signup/">{t("nav.signup")}</a>
             </Button>
           </div>
         </div>

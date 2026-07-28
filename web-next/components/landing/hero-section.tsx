@@ -2,8 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import type { HeroStats } from "@/lib/cli-market-stats";
-
-const words = ["ciencia", "mercado", "evidencia", "datos"];
+import { useLocale } from "@/lib/i18n/locale-context";
 
 function BlurWord({ word, trigger }: { word: string; trigger: number }) {
   const letters = word.split("");
@@ -110,6 +109,8 @@ type HeroSectionProps = {
 };
 
 export function HeroSection({ stats }: HeroSectionProps) {
+  const { t, tList } = useLocale();
+  const words = tList("hero.words");
   const [isVisible, setIsVisible] = useState(false);
   const [wordIndex, setWordIndex] = useState(0);
 
@@ -122,7 +123,7 @@ export function HeroSection({ stats }: HeroSectionProps) {
       setWordIndex((prev) => (prev + 1) % words.length);
     }, 2500);
     return () => clearInterval(interval);
-  }, []);
+  }, [words.length]);
 
   return (
     <section className="relative min-h-screen flex flex-col justify-center items-start overflow-hidden bg-black">
@@ -180,22 +181,22 @@ export function HeroSection({ stats }: HeroSectionProps) {
         >
           <span className="inline-flex items-center gap-3 text-sm font-mono text-white/60">
             <span className="w-8 h-px bg-white/30" />
-            CLI Market Export Intelligence · motor PIT
+            {t("hero.eyebrow")}
           </span>
         </div>
-        
+
         {/* Main headline */}
         <div className="mb-12">
-          <h1 
+          <h1
             className={`text-left text-[clamp(2rem,6vw,7rem)] font-display leading-[0.92] tracking-tight text-white transition-all duration-1000 ${
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
             }`}
           >
-            <span className="block whitespace-nowrap">Antes de exportar,</span>
+            <span className="block whitespace-nowrap">{t("hero.headlineLine1")}</span>
             <span className="block whitespace-nowrap">
-              valida con{" "}
+              {t("hero.headlineLine2Prefix")}{" "}
               <span className="relative inline-block">
-                <BlurWord word={words[wordIndex]} trigger={wordIndex} />
+                <BlurWord word={words[wordIndex] ?? ""} trigger={wordIndex} />
               </span>
             </span>
           </h1>
@@ -208,21 +209,20 @@ export function HeroSection({ stats }: HeroSectionProps) {
           }`}
         >
           <p className="max-w-lg text-white/70 text-base lg:text-lg leading-relaxed">
-            Descubre si tu producto tiene respaldo científico, espacio competitivo y una
-            oportunidad real en el mercado objetivo — antes de invertir un solo dólar.
+            {t("hero.lead")}
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <a
               href="/signup/"
               className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-transform hover:-translate-y-0.5"
             >
-              Regístrate gratis
+              {t("hero.ctaSignup")}
             </a>
             <a
               href="mailto:hello@cli-market.dev?subject=CLI%20Market%20PIT%20Demo"
               className="inline-flex items-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-medium text-white/90 transition-colors hover:border-white/50"
             >
-              Solicita una demo
+              {t("hero.ctaDemo")}
             </a>
           </div>
         </div>
@@ -237,9 +237,9 @@ export function HeroSection({ stats }: HeroSectionProps) {
       >
         <div className="max-w-[1400px] mx-auto flex items-start gap-10 lg:gap-20">
           {[
-            { value: stats.skus, label: "SKUs indexados" },
-            { value: stats.priceSnapshots, label: "precios indexados" },
-            { value: stats.countries, label: "países cubiertos" },
+            { value: stats.skus, label: t("hero.statSkus") },
+            { value: stats.priceSnapshots, label: t("hero.statPrices") },
+            { value: stats.countries, label: t("hero.statCountries") },
           ].map((stat) => (
             <div key={stat.label} className="flex flex-col gap-2">
               <span className="text-3xl lg:text-4xl font-display text-white">{stat.value}</span>

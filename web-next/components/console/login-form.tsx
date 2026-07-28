@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { login } from "@/lib/pit-api";
+import { useLocale } from "@/lib/i18n/locale-context";
 
 export function LoginForm() {
+  const { t } = useLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -24,11 +26,11 @@ export function LoginForm() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
-      <h1 className="font-display text-3xl">Inicia sesión</h1>
+      <h1 className="font-display text-3xl">{t("auth.loginTitle")}</h1>
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
         <div>
           <label className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted-foreground">
-            Email
+            {t("auth.email")}
           </label>
           <input
             type="email"
@@ -40,7 +42,7 @@ export function LoginForm() {
         </div>
         <div>
           <label className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted-foreground">
-            Contraseña
+            {t("auth.password")}
           </label>
           <input
             type="password"
@@ -56,13 +58,13 @@ export function LoginForm() {
           disabled={submitting}
           className="w-full rounded-full bg-[#64ffda] px-5 py-3 text-sm font-medium text-[#0a192f] transition-opacity disabled:opacity-40"
         >
-          {submitting ? "Ingresando…" : "Iniciar sesión"}
+          {submitting ? t("auth.signingIn") : t("auth.loginTitle")}
         </button>
       </form>
       <p className="mt-6 text-sm text-muted-foreground">
-        ¿No tienes cuenta?{" "}
+        {t("auth.noAccount")}{" "}
         <a href="/signup" className="text-[#64ffda] hover:underline">
-          Crea una gratis
+          {t("auth.createFree")}
         </a>
       </p>
     </div>

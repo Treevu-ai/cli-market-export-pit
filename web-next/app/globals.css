@@ -4,7 +4,48 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Deep Tech Blue / Vibrant Teal — PIT brand tokens, same palette as web/css/main.css */
+  /* Deep Tech Blue / Vibrant Teal — PIT brand tokens, light mode.
+     Same hue angles as the dark palette below (258 navy, 174.3 teal,
+     271 muted, 17.6 destructive, 95.3 chart gold), re-tuned for
+     light-background contrast. */
+  --background: oklch(0.99 0.003 248);
+  --foreground: oklch(0.214 0.048 258);
+  --card: oklch(0.97 0.006 258);
+  --card-foreground: oklch(0.214 0.048 258);
+  --popover: oklch(0.97 0.006 258);
+  --popover-foreground: oklch(0.214 0.048 258);
+  --primary: oklch(0.55 0.14 174.3);
+  --primary-foreground: oklch(0.99 0.003 248);
+  --secondary: oklch(0.95 0.01 258);
+  --secondary-foreground: oklch(0.214 0.048 258);
+  --muted: oklch(0.95 0.01 258);
+  --muted-foreground: oklch(0.45 0.04 271);
+  --accent: oklch(0.93 0.02 262);
+  --accent-foreground: oklch(0.214 0.048 258);
+  --destructive: oklch(0.55 0.22 17.6);
+  --destructive-foreground: oklch(0.99 0.003 248);
+  --border: oklch(0.88 0.02 262);
+  --input: oklch(0.93 0.015 262);
+  --ring: oklch(0.55 0.14 174.3);
+  --chart-1: oklch(0.55 0.14 174.3);
+  --chart-2: oklch(0.7 0.15 95.3);
+  --chart-3: oklch(0.45 0.04 271);
+  --chart-4: oklch(0.55 0.22 17.6);
+  --chart-5: oklch(0.5 0.04 262);
+  --radius: 0.25rem;
+  --sidebar: oklch(0.97 0.006 258);
+  --sidebar-foreground: oklch(0.214 0.048 258);
+  --sidebar-primary: oklch(0.55 0.14 174.3);
+  --sidebar-primary-foreground: oklch(0.99 0.003 248);
+  --sidebar-accent: oklch(0.93 0.02 262);
+  --sidebar-accent-foreground: oklch(0.214 0.048 258);
+  --sidebar-border: oklch(0.88 0.02 262);
+  --sidebar-ring: oklch(0.55 0.14 174.3);
+}
+
+.dark {
+  /* Deep Tech Blue / Vibrant Teal — PIT brand tokens, dark mode (the
+     original, and only, palette before the light/dark toggle existed). */
   --background: oklch(0.214 0.048 258);
   --foreground: oklch(0.981 0.003 248);
   --card: oklch(0.245 0.050 262);
@@ -29,7 +70,6 @@
   --chart-3: oklch(0.662 0.046 271);
   --chart-4: oklch(0.586 0.222 17.6);
   --chart-5: oklch(0.5 0.04 262);
-  --radius: 0.25rem;
   --sidebar: oklch(0.214 0.048 258);
   --sidebar-foreground: oklch(0.981 0.003 248);
   --sidebar-primary: oklch(0.908 0.141 174.3);

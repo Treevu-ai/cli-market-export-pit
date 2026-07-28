@@ -1,30 +1,9 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useLocale } from "@/lib/i18n/locale-context";
 
-const metrics = [
-  {
-    value: 13,
-    suffix: "",
-    prefix: "",
-    label: "Hallazgos científicos",
-    sublabel: "caso arándano orgánico → US",
-  },
-  {
-    value: 17,
-    suffix: "",
-    prefix: "",
-    label: "Referencias comerciales",
-    sublabel: "mismo caso",
-  },
-  {
-    value: 48,
-    suffix: "",
-    prefix: "",
-    label: "Productos de góndola comparados",
-    sublabel: "mercado PE, CLI Market",
-  },
-];
+const METRIC_VALUES = [13, 17, 48];
 
 function AnimatedNumber({ end, suffix = "", prefix = "" }: { end: number; suffix?: string; prefix?: string }) {
   const [count, setCount] = useState(0);
@@ -217,6 +196,14 @@ function DotGraph({
 }
 
 export function MetricsSection() {
+  const { t } = useLocale();
+  const metrics = METRIC_VALUES.map((value, i) => ({
+    value,
+    suffix: "",
+    prefix: "",
+    label: t(`metrics.items.${i}.label`),
+    sublabel: t(`metrics.items.${i}.sublabel`),
+  }));
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -242,19 +229,19 @@ export function MetricsSection() {
             <div className="flex items-center gap-4 mb-6">
               <span className="flex items-center gap-2 px-3 py-1 bg-[#64ffda]/10 text-[#64ffda] text-xs font-mono">
                 <span className="w-2 h-2 rounded-full bg-[#64ffda] animate-pulse" />
-                CASO REAL
+                {t("metrics.tag")}
               </span>
               <span className="text-sm font-mono text-muted-foreground">
-                arándano orgánico → US
+                {t("metrics.tagDetail")}
               </span>
             </div>
 
             <h2 className={`text-6xl md:text-7xl lg:text-[140px] font-display tracking-tight leading-[0.95] transition-all duration-1000 ${
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
             }`}>
-              De la hipótesis
+              {t("metrics.headline")}
               <br />
-              <span className="text-muted-foreground">a la evidencia.</span>
+              <span className="text-muted-foreground">{t("metrics.headlineAccent")}</span>
             </h2>
           </div>
         </div>
@@ -314,7 +301,7 @@ export function MetricsSection() {
           <span>EPO OPS</span>
           <span>CLI Market</span>
           <span>OpenFDA</span>
-          <span className="text-foreground">+10 fuentes más</span>
+          <span className="text-foreground">{t("metrics.tickerExtra")}</span>
         </div>
       </div>
     </section>

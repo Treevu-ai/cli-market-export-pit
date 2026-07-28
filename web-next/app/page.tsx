@@ -17,7 +17,7 @@ export default async function Home() {
   const heroStats = await getCliMarketHeroStats();
 
   return (
-    <main className="relative min-h-screen overflow-x-hidden">
+    <main className="dark relative min-h-screen overflow-x-hidden bg-background text-foreground">
       <Navigation />
       <HeroSection stats={heroStats} />
       <FeaturesSection />

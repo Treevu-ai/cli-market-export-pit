@@ -1,27 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-
-const features = [
-  {
-    title: "Endpoints documentados",
-    description: "OpenAPI en /docs, listo para probar sin configuración previa.",
-  },
-  {
-    title: "JSON o PDF",
-    description: "Mismo research run, exportable como reporte ejecutivo o datos crudos.",
-  },
-  {
-    title: "Trazabilidad por diseño",
-    description: "Cada fuente con checksum SHA-256, cada score con versión.",
-  },
-  {
-    title: "Sin vendor lock-in",
-    description: "Conectores abiertos, sin depender de un solo proveedor de datos.",
-  },
-];
+import { useLocale } from "@/lib/i18n/locale-context";
 
 export function DevelopersSection() {
+  const { t } = useLocale();
+  const features = [0, 1, 2, 3].map((i) => ({
+    title: t(`developers.features.${i}.title`),
+    description: t(`developers.features.${i}.description`),
+  }));
   const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -72,26 +59,25 @@ export function DevelopersSection() {
         >
           <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
             <span className="w-8 h-px bg-foreground/30" />
-            API abierta
+            {t("developers.eyebrow")}
           </span>
           <h2 className="text-6xl md:text-7xl lg:text-[128px] font-display tracking-tight leading-[0.9]">
-            Automatiza
+            {t("developers.headline")}
             <br />
-            <span className="text-muted-foreground">el research.</span>
+            <span className="text-muted-foreground">{t("developers.headlineAccent")}</span>
           </h2>
         </div>
 
         {/* Description + Features — left half only */}
         <div
-          className={`max-w-[50%] transition-all duration-700 delay-100 ${
+          className={`max-w-full lg:max-w-[50%] transition-all duration-700 delay-100 ${
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
           <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-md">
-            Una API REST documentada para correr research runs, generar reportes y fichas
-            ejecutivas — sin depender de la consola web.
+            {t("developers.lead")}
           </p>
-          <div className="grid grid-cols-2 gap-6 mb-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
             {features.map((feature, index) => (
               <div
                 key={feature.title}
@@ -109,7 +95,7 @@ export function DevelopersSection() {
             href="https://cli-market-pit-backend.fly.dev/docs" target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-sm font-mono text-foreground border-b border-foreground/30 pb-1 hover:border-foreground transition-colors"
           >
-            Ver documentación OpenAPI →
+            {t("developers.viewDocs")}
           </a>
         </div>
       </div>

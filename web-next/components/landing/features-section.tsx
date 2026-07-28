@@ -1,15 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
-const features = [
-  {
-    number: "01",
-    title: "Evidencia antes que inversión",
-    description: "No desarrolles primero el producto. Desarrolla primero la evidencia — ciencia, mercado y formulación en una sola lectura, antes de invertir en certificación o producción.",
-    stats: { value: "3", label: "capas de evidencia" },
-  },
-];
+import { useLocale } from "@/lib/i18n/locale-context";
 
 // Floating dot particles visualization
 function ParticleVisualization() {
@@ -111,6 +103,15 @@ function ParticleVisualization() {
 }
 
 export function FeaturesSection() {
+  const { t } = useLocale();
+  const features = [
+    {
+      number: t("features.itemNumber"),
+      title: t("features.itemTitle"),
+      description: t("features.itemDescription"),
+      stats: { value: t("features.itemStatValue"), label: t("features.itemStatLabel") },
+    },
+  ];
   const [isVisible, setIsVisible] = useState(false);
   const [activeFeature, setActiveFeature] = useState(0);
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -140,24 +141,23 @@ export function FeaturesSection() {
             <div className="lg:col-span-7">
               <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
                 <span className="w-12 h-px bg-foreground/30" />
-                Método
+                {t("features.eyebrow")}
               </span>
               <h2
                 className={`text-6xl md:text-7xl lg:text-[128px] font-display tracking-tight leading-[0.9] transition-all duration-1000 ${
                   isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
                 }`}
               >
-                Valida
+                {t("features.headlineLine1")}
                 <br />
-                <span className="text-muted-foreground">primero.</span>
+                <span className="text-muted-foreground">{t("features.headlineLine2")}</span>
               </h2>
             </div>
             <div className="lg:col-span-5 lg:pb-4">
               <p className={`text-xl text-muted-foreground leading-relaxed transition-all duration-1000 delay-200 ${
                 isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
               }`}>
-                Exportar no debería comenzar con una suposición. Muchas empresas invierten en
-                formulación, empaque y certificación antes de validar si la oportunidad existe.
+                {t("features.lead")}
               </p>
             </div>
           </div>
