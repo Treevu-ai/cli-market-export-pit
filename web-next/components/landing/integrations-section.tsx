@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Grape, FlaskConical, Wheat, Leaf, Citrus, Sprout } from "lucide-react";
+import { Grape, FlaskConical, Wheat, Leaf, Citrus, Sprout, Coffee } from "lucide-react";
 
 const integrations = [
   { name: "Arándano", category: "PE→US", query: "arándano orgánico", market: "US", Icon: Grape },
@@ -10,6 +10,9 @@ const integrations = [
   { name: "Palta", category: "PE→US", query: "palta hass", market: "US", Icon: Leaf },
   { name: "Mango", category: "PE→US", query: "mango kent", market: "US", Icon: Citrus },
   { name: "Funcionales", category: "Claims", query: "bebida funcional antioxidante", market: "US", Icon: Sprout },
+  { name: "Café", category: "PE→US", query: "café tostado especial", market: "US", Icon: Coffee },
+  { name: "Uva", category: "PE→US", query: "uva red globe", market: "US", Icon: Grape },
+  { name: "Mandarina", category: "PE→US", query: "mandarina w murcott", market: "US", Icon: Citrus },
 ];
 
 export function IntegrationsSection() {
@@ -131,7 +134,7 @@ export function IntegrationsSection() {
         }`}>
           <div className="flex flex-wrap gap-12">
             {[
-              { value: "6", label: "Categorías con caso real" },
+              { value: String(integrations.length), label: "Categorías con caso real" },
               { value: "ISO-2", label: "Cualquier mercado destino" },
               { value: "Español/Inglés", label: "Consulta libre" },
             ].map((stat) => (

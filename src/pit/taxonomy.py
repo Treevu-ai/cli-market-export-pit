@@ -42,6 +42,11 @@ _SEED_SYNONYMS: list[tuple[str, str]] = [
     ("espárrago", "asparagus"),
     ("asparagus", "asparagus"),
     ("maca", "maca"),
+    ("mandarina", "mandarin"),
+    ("mandarinas", "mandarin"),
+    ("mandarin", "mandarin"),
+    ("mandarins", "mandarin"),
+    ("tangerine", "mandarin"),
 ]
 
 _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
@@ -56,6 +61,7 @@ _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
     ("olive_oil", "150910", "Virgin olive oil"),
     ("asparagus", "070920", "Fresh asparagus"),
     ("maca", "121190", "Plants and parts for pharmacy or perfumery"),
+    ("mandarin", "080520", "Fresh or dried mandarins, clementines, and tangerines"),
 ]
 
 
