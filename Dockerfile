@@ -22,11 +22,15 @@ RUN groupadd -r pit && useradd -r -g pit -d /app pit
 
 COPY --from=builder /root/.local /home/pit/.local
 COPY src/ src/
+COPY web/ web/
+COPY assets/ assets/
 
-RUN chown -R pit:pit /app
+RUN chown -R pit:pit /app /home/pit
 USER pit
 
+ENV HOME="/home/pit"
 ENV PATH="/home/pit/.local/bin:${PATH}"
+ENV PYTHONPATH="/app/src"
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
