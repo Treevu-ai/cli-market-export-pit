@@ -821,6 +821,40 @@ textarea {
   margin-bottom: 0.75rem;
 }
 
+.report-preview {
+  padding: 0;
+  overflow: hidden;
+}
+
+.report-preview-chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1rem;
+  background: var(--surface-container-low);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.report-preview-url {
+  margin-left: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.report-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.report-preview-caption {
+  margin: 0;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
 /* Comparison */
 .compare-table {
   width: 100%;
