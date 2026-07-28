@@ -70,6 +70,22 @@ if (whatsappFloat) {
   whatsappFloat.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${intro}`;
 }
 
+const revealTargets = document.querySelectorAll("main > section:not(.hero)");
+if (revealTargets.length) {
+  revealTargets.forEach((section) => section.classList.add("reveal"));
+  const revealObserver = new IntersectionObserver(
+    (entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    },
+    { threshold: 0.12, rootMargin: "0px 0px -80px 0px" },
+  );
+  revealTargets.forEach((section) => revealObserver.observe(section));
+}
+
 const sectionLinks = document.querySelectorAll('.nav-links a[href^="#"]');
 const sections = [...sectionLinks].map((link) => document.querySelector(link.getAttribute("href"))).filter(Boolean);
 
