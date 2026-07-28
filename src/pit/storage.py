@@ -150,6 +150,7 @@ class ResearchStore:
                 self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT")
                 self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_expires_at TEXT")
                 self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier_expires_at TEXT")
+                self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'es'")
                 self._execute(db, "CREATE INDEX IF NOT EXISTS idx_users_verification_token ON users(verification_token)")
                 # Grandfather pre-existing accounts as verified: only rows that never
                 # received a verification_token (i.e. created before this migration)
@@ -357,6 +358,7 @@ class ResearchStore:
                     "ALTER TABLE users ADD COLUMN verification_token TEXT",
                     "ALTER TABLE users ADD COLUMN verification_expires_at TEXT",
                     "ALTER TABLE users ADD COLUMN tier_expires_at TEXT",
+                    "ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT 'es'",
                 ):
                     try:
                         db.execute(stmt)
@@ -910,6 +912,7 @@ class ResearchStore:
         email: str,
         password_hash: str,
         tier: str = "free",
+        locale: str = "es",
         verification_token: str | None = None,
         verification_expires_at: str | None = None,
     ) -> dict[str, Any]:
@@ -921,9 +924,9 @@ class ResearchStore:
         created_at = _now()
         with self._transaction() as db:
             self._execute(db,
-                "INSERT INTO users (id, email, password_hash, tier, created_at, verification_token, verification_expires_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (user_id, email, password_hash, tier, created_at, verification_token, verification_expires_at),
+                "INSERT INTO users (id, email, password_hash, tier, created_at, locale, verification_token, verification_expires_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (user_id, email, password_hash, tier, created_at, locale, verification_token, verification_expires_at),
             )
         return self.get_user_by_id(user_id)  # type: ignore[return-value]
 

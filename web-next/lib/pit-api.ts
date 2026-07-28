@@ -226,10 +226,10 @@ export interface MeResponse {
   usage: { used: number; limit: number | null; period: string };
 }
 
-export async function signup(email: string, password: string): Promise<AuthSession> {
+export async function signup(email: string, password: string, locale: "es" | "en" = "es"): Promise<AuthSession> {
   const envelope = await pitRequest<{ data: AuthSession }>("/v1/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, locale }),
   });
   return envelope.data;
 }

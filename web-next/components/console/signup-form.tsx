@@ -7,7 +7,7 @@ import { useLocale } from "@/lib/i18n/locale-context";
 const PASSWORD_SPECIAL_CHARS = /[!@#$%^&*()_+\-=[\]{}|;:,.<>?/~`"'\\]/;
 
 export function SignupForm() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -32,7 +32,7 @@ export function SignupForm() {
     }
     setSubmitting(true);
     try {
-      await signup(email, password);
+      await signup(email, password, locale);
       window.location.href = "/analyze/";
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

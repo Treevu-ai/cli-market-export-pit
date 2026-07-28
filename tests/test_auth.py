@@ -65,6 +65,37 @@ class AuthTests(unittest.TestCase):
             self.assertEqual(data["tier"], "free")
             self.assertTrue(data["token"])
 
+    def test_signup_defaults_to_spanish_locale(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client, store = self._client_and_store(directory)
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            user = store.get_user_by_email("a@b.com")
+            self.assertEqual(user["locale"], "es")
+            _, kwargs = self.mock_send_verification_email.call_args
+            self.assertEqual(kwargs["locale"], "es")
+
+    def test_signup_respects_english_locale(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client, store = self._client_and_store(directory)
+            client.post(
+                "/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!", "locale": "en"}
+            )
+            user = store.get_user_by_email("a@b.com")
+            self.assertEqual(user["locale"], "en")
+            _, kwargs = self.mock_send_verification_email.call_args
+            self.assertEqual(kwargs["locale"], "en")
+
+    def test_resend_verification_uses_stored_locale(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            signup = client.post(
+                "/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!", "locale": "en"}
+            )
+            token = signup.json()["data"]["token"]
+            client.post("/v1/auth/resend-verification", headers={"Authorization": f"Bearer {token}"})
+            _, kwargs = self.mock_send_verification_email.call_args
+            self.assertEqual(kwargs["locale"], "en")
+
     def test_signup_rejects_duplicate_email(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)

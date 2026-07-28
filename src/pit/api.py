@@ -113,6 +113,7 @@ def _validate_password_strength(password: str) -> str:
 class SignupCreate(BaseModel):
     email: EmailStr
     password: Annotated[str, Field(min_length=8, max_length=200)]
+    locale: Annotated[str, Field(pattern=r"^(es|en)$")] = "es"
 
     _validate_password = field_validator("password")(_validate_password_strength)
 
@@ -388,16 +389,16 @@ def create_app(
         expires_at = (datetime.now(timezone.utc) + auth.VERIFICATION_TOKEN_TTL).isoformat()
         return token, expires_at
 
-    def _dispatch_verification_email(*, to: str, token: str) -> None:
+    def _dispatch_verification_email(*, to: str, token: str, locale: str) -> None:
         try:
-            email_service.send_verification_email(to=to, token=token)
+            email_service.send_verification_email(to=to, token=token, locale=locale)
         except email_service.EmailSendError as error:
             logging.getLogger(__name__).error("failed to send verification email to %s: %s", to, error)
 
     def _resend_verification_email(user: dict[str, Any]) -> None:
         token, expires_at = _new_verification_token()
         research_service.store.set_verification_token(user_id=user["id"], token=token, expires_at=expires_at)
-        _dispatch_verification_email(to=user["email"], token=token)
+        _dispatch_verification_email(to=user["email"], token=token, locale=user["locale"])
 
     @app.post("/v1/auth/signup", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_signup_rate_limit)])
     def signup(payload: SignupCreate, response: Response) -> dict[str, Any]:
@@ -408,10 +409,11 @@ def create_app(
         user = research_service.store.create_user(
             email=payload.email,
             password_hash=password_hash,
+            locale=payload.locale,
             verification_token=verification_token,
             verification_expires_at=verification_expires_at,
         )
-        _dispatch_verification_email(to=user["email"], token=verification_token)
+        _dispatch_verification_email(to=user["email"], token=verification_token, locale=user["locale"])
         token = auth.create_access_token(user_id=user["id"], email=user["email"])
         _set_session_cookie(response, token)
         return _envelope({"token": token, "email": user["email"], "tier": user["tier"]})
