@@ -9,12 +9,17 @@ import { SecuritySection } from "@/components/landing/security-section";
 import { DevelopersSection } from "@/components/landing/developers-section";
 import { CtaSection } from "@/components/landing/cta-section";
 import { FooterSection } from "@/components/landing/footer-section";
+import { getCliMarketHeroStats } from "@/lib/cli-market-stats";
 
-export default function Home() {
+export const revalidate = 300;
+
+export default async function Home() {
+  const heroStats = await getCliMarketHeroStats();
+
   return (
     <main className="relative min-h-screen overflow-x-hidden">
       <Navigation />
-      <HeroSection />
+      <HeroSection stats={heroStats} />
       <FeaturesSection />
       <HowItWorksSection />
       <InfrastructureSection />

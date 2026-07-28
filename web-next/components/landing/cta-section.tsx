@@ -86,7 +86,7 @@ export function CtaSection() {
               {/* Right: looping port video */}
               <div className="hidden lg:block w-[600px] h-[420px] -mr-16 overflow-hidden">
                 <video autoPlay muted loop playsInline aria-hidden="true" className="w-full h-full object-cover">
-                  <source src="/videos/port-3.mp4" type="video/mp4" />
+                  <source src="/videos/port-2.mp4" type="video/mp4" />
                 </video>
               </div>
             </div>

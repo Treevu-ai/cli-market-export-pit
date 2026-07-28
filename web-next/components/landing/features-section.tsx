@@ -200,7 +200,7 @@ export function FeaturesSection() {
                 aria-hidden="true"
                 className="absolute inset-0 w-full h-full object-cover object-center"
               >
-                <source src="/videos/port-2.mp4" type="video/mp4" />
+                <source src="/videos/hero-port.mp4" type="video/mp4" />
               </video>
               {/* Fade left edge into black */}
               <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-transparent" />

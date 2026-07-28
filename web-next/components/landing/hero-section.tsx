@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import type { HeroStats } from "@/lib/cli-market-stats";
 
 const words = ["ciencia", "mercado", "evidencia", "datos"];
 
@@ -104,7 +105,11 @@ function BlurWord({ word, trigger }: { word: string; trigger: number }) {
   );
 }
 
-export function HeroSection() {
+type HeroSectionProps = {
+  stats: HeroStats;
+};
+
+export function HeroSection({ stats }: HeroSectionProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [wordIndex, setWordIndex] = useState(0);
 
@@ -132,7 +137,7 @@ export function HeroSection() {
           poster="/videos/hero-port-poster.jpg"
           className="w-full h-full object-cover object-center opacity-80"
         >
-          <source src="/videos/hero-port.mp4" type="video/mp4" />
+          <source src="/videos/hero-grok.mp4" type="video/mp4" />
         </video>
         {/* Subtle overlay to ensure text readability on the left */}
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
@@ -232,9 +237,9 @@ export function HeroSection() {
       >
         <div className="max-w-[1400px] mx-auto flex items-start gap-10 lg:gap-20">
           {[
-            { value: "13", label: "hallazgos científicos" },
-            { value: "17", label: "referencias comerciales" },
-            { value: "S/3.90+", label: "entrada de precio" },
+            { value: stats.skus, label: "SKUs indexados" },
+            { value: stats.priceSnapshots, label: "precios indexados" },
+            { value: stats.countries, label: "países cubiertos" },
           ].map((stat) => (
             <div key={stat.label} className="flex flex-col gap-2">
               <span className="text-3xl lg:text-4xl font-display text-white">{stat.value}</span>
