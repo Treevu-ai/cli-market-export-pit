@@ -87,6 +87,16 @@ class AuthTests(unittest.TestCase):
             response = client.post("/v1/auth/login", json={"email": "a@b.com", "password": "Wrongpass123!"})
             self.assertEqual(response.status_code, 401)
 
+    def test_login_rate_limited_after_ten_attempts_from_same_ip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            for _ in range(10):
+                response = client.post("/v1/auth/login", json={"email": "a@b.com", "password": "Wrongpass123!"})
+                self.assertEqual(response.status_code, 401)
+            eleventh = client.post("/v1/auth/login", json={"email": "a@b.com", "password": "Testpass123!"})
+            self.assertEqual(eleventh.status_code, 429)
+
     def test_login_rejects_unknown_email(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)

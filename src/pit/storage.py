@@ -140,6 +140,7 @@ class ResearchStore:
                     "CREATE TABLE IF NOT EXISTS usage_counters (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, period TEXT NOT NULL, run_count INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, period))",
                     "CREATE TABLE IF NOT EXISTS signup_rate_counters (id TEXT PRIMARY KEY, ip TEXT NOT NULL, window_key TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, UNIQUE(ip, window_key))",
                     "CREATE TABLE IF NOT EXISTS resend_verification_counters (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, window_key TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, window_key))",
+                    "CREATE TABLE IF NOT EXISTS login_rate_counters (id TEXT PRIMARY KEY, ip TEXT NOT NULL, window_key TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, UNIQUE(ip, window_key))",
                 ]
                 for stmt in statements:
                     self._execute(db, stmt)
@@ -336,6 +337,14 @@ class ResearchStore:
                         window_key TEXT NOT NULL,
                         attempt_count INTEGER NOT NULL DEFAULT 0,
                         UNIQUE(user_id, window_key)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS login_rate_counters (
+                        id TEXT PRIMARY KEY,
+                        ip TEXT NOT NULL,
+                        window_key TEXT NOT NULL,
+                        attempt_count INTEGER NOT NULL DEFAULT 0,
+                        UNIQUE(ip, window_key)
                     );
                     """
                 )
@@ -1075,6 +1084,33 @@ class ResearchStore:
                 return None
             row = self._execute(
                 db, "SELECT attempt_count FROM resend_verification_counters WHERE user_id=? AND window_key=?", (user_id, window_key)
+            ).fetchone()
+        return row["attempt_count"]
+
+    def get_and_increment_login_attempts(self, *, ip: str, window_key: str, limit: int) -> int | None:
+        """Same atomic conditional-UPDATE pattern as get_and_increment_signup_attempts,
+        keyed by ip — throttles POST /v1/auth/login to slow down credential stuffing."""
+        counter_id = f"lgr_{uuid.uuid4().hex}"
+        with self._transaction() as db:
+            if self._backend == "postgresql":
+                self._execute(db,
+                    "INSERT INTO login_rate_counters (id, ip, window_key, attempt_count) VALUES (?, ?, ?, 0) "
+                    "ON CONFLICT (ip, window_key) DO NOTHING",
+                    (counter_id, ip, window_key),
+                )
+            else:
+                self._execute(db,
+                    "INSERT OR IGNORE INTO login_rate_counters (id, ip, window_key, attempt_count) VALUES (?, ?, ?, 0)",
+                    (counter_id, ip, window_key),
+                )
+            cursor = self._execute(db,
+                "UPDATE login_rate_counters SET attempt_count = attempt_count + 1 WHERE ip=? AND window_key=? AND attempt_count < ?",
+                (ip, window_key, limit),
+            )
+            if cursor.rowcount != 1:
+                return None
+            row = self._execute(
+                db, "SELECT attempt_count FROM login_rate_counters WHERE ip=? AND window_key=?", (ip, window_key)
             ).fetchone()
         return row["attempt_count"]
 

@@ -441,7 +441,28 @@ def create_app(
         _resend_verification_email(user)
         return _envelope({"sent": True})
 
-    @app.post("/v1/auth/login")
+    LOGIN_RATE_LIMIT_PER_IP = 10
+
+    def require_login_rate_limit(request: Request) -> None:
+        ip = _client_ip(request)
+        window_key = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        try:
+            new_count = research_service.store.get_and_increment_login_attempts(
+                ip=ip, window_key=window_key, limit=LOGIN_RATE_LIMIT_PER_IP
+            )
+        except Exception as error:
+            logging.getLogger(__name__).error("login rate limit check failed: %s", error)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Login is temporarily unavailable. Please try again shortly.",
+            ) from error
+        if new_count is None:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many login attempts from this address. Try again later.",
+            )
+
+    @app.post("/v1/auth/login", dependencies=[Depends(require_login_rate_limit)])
     def login(payload: LoginCreate, response: Response) -> dict[str, Any]:
         user = research_service.store.get_user_by_email(payload.email)
         if user is None or not auth.verify_password(payload.password, user["password_hash"]):
