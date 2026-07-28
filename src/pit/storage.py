@@ -104,6 +104,9 @@ class ResearchStore:
         try:
             yield connection
             connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
         finally:
             if self._backend == "sqlite":
                 connection.close()
@@ -135,11 +138,23 @@ class ResearchStore:
                     "CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, format TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL)",
                     "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, tier TEXT NOT NULL DEFAULT 'free', created_at TEXT NOT NULL)",
                     "CREATE TABLE IF NOT EXISTS usage_counters (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, period TEXT NOT NULL, run_count INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, period))",
+                    "CREATE TABLE IF NOT EXISTS signup_rate_counters (id TEXT PRIMARY KEY, ip TEXT NOT NULL, window_key TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, UNIQUE(ip, window_key))",
+                    "CREATE TABLE IF NOT EXISTS resend_verification_counters (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, window_key TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, window_key))",
                 ]
                 for stmt in statements:
                     self._execute(db, stmt)
                 self._execute(db, "ALTER TABLE research_runs ADD COLUMN IF NOT EXISTS from_publication_date TEXT NOT NULL DEFAULT '2021-01-01'")
                 self._execute(db, "INSERT INTO evidence_source_links (id, evidence_record_id, source_request_id, source, external_id, normalized_payload, created_at) SELECT 'legacy_' || id, id, source_request_id, source, external_id, normalized_payload, created_at FROM evidence_records ON CONFLICT DO NOTHING")
+                self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE")
+                self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT")
+                self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_expires_at TEXT")
+                self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier_expires_at TEXT")
+                self._execute(db, "CREATE INDEX IF NOT EXISTS idx_users_verification_token ON users(verification_token)")
+                # Grandfather pre-existing accounts as verified: only rows that never
+                # received a verification_token (i.e. created before this migration)
+                # match here — every signup since sets a token in the same request,
+                # so this can never flip a genuinely-unverified new account.
+                self._execute(db, "UPDATE users SET email_verified = TRUE WHERE verification_token IS NULL AND email_verified = FALSE")
             else:
                 db.executescript(
                     """
@@ -306,12 +321,41 @@ class ResearchStore:
                         run_count INTEGER NOT NULL DEFAULT 0,
                         UNIQUE(user_id, period)
                     );
+
+                    CREATE TABLE IF NOT EXISTS signup_rate_counters (
+                        id TEXT PRIMARY KEY,
+                        ip TEXT NOT NULL,
+                        window_key TEXT NOT NULL,
+                        attempt_count INTEGER NOT NULL DEFAULT 0,
+                        UNIQUE(ip, window_key)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS resend_verification_counters (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        window_key TEXT NOT NULL,
+                        attempt_count INTEGER NOT NULL DEFAULT 0,
+                        UNIQUE(user_id, window_key)
+                    );
                     """
                 )
                 try:
                     db.execute("ALTER TABLE research_runs ADD COLUMN from_publication_date TEXT NOT NULL DEFAULT '2021-01-01'")
                 except sqlite3.OperationalError:
                     pass
+                for stmt in (
+                    "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN verification_token TEXT",
+                    "ALTER TABLE users ADD COLUMN verification_expires_at TEXT",
+                    "ALTER TABLE users ADD COLUMN tier_expires_at TEXT",
+                ):
+                    try:
+                        db.execute(stmt)
+                    except sqlite3.OperationalError:
+                        pass
+                db.execute("CREATE INDEX IF NOT EXISTS idx_users_verification_token ON users(verification_token)")
+                # Grandfather pre-existing accounts as verified (see Postgres branch comment above).
+                db.execute("UPDATE users SET email_verified = 1 WHERE verification_token IS NULL AND email_verified = 0")
                 db.execute(
                     """
                     INSERT OR IGNORE INTO evidence_source_links (
@@ -851,13 +895,26 @@ class ResearchStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def create_user(self, *, email: str, password_hash: str, tier: str = "free") -> dict[str, Any]:
+    def create_user(
+        self,
+        *,
+        email: str,
+        password_hash: str,
+        tier: str = "free",
+        verification_token: str | None = None,
+        verification_expires_at: str | None = None,
+    ) -> dict[str, Any]:
+        # verification_token is set in this same INSERT (not a follow-up UPDATE) so a
+        # user row can never be observed with a NULL token after a partial failure —
+        # the grandfather backfill below relies on that invariant to only ever match
+        # genuinely pre-existing accounts, never a new signup interrupted mid-flow.
         user_id = f"usr_{uuid.uuid4().hex}"
         created_at = _now()
         with self._transaction() as db:
             self._execute(db,
-                "INSERT INTO users (id, email, password_hash, tier, created_at) VALUES (?, ?, ?, ?, ?)",
-                (user_id, email, password_hash, tier, created_at),
+                "INSERT INTO users (id, email, password_hash, tier, created_at, verification_token, verification_expires_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (user_id, email, password_hash, tier, created_at, verification_token, verification_expires_at),
             )
         return self.get_user_by_id(user_id)  # type: ignore[return-value]
 
@@ -871,10 +928,59 @@ class ResearchStore:
             row = self._execute(db, "SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         return dict(row) if row else None
 
-    def set_user_tier(self, user_id: str, tier: str) -> dict[str, Any] | None:
+    def set_user_tier(self, user_id: str, tier: str, *, expires_at: str | None = None) -> dict[str, Any] | None:
         with self._transaction() as db:
-            self._execute(db, "UPDATE users SET tier=? WHERE id=?", (tier, user_id))
+            self._execute(db, "UPDATE users SET tier=?, tier_expires_at=? WHERE id=?", (tier, expires_at, user_id))
         return self.get_user_by_id(user_id)
+
+    def set_verification_token(self, *, user_id: str, token: str, expires_at: str) -> None:
+        with self._transaction() as db:
+            self._execute(
+                db,
+                "UPDATE users SET verification_token=?, verification_expires_at=? WHERE id=?",
+                (token, expires_at, user_id),
+            )
+
+    def verify_email(self, *, token: str, now: str) -> dict[str, Any] | None:
+        """Atomically consumes a verification token: flips email_verified and clears
+        the token in one conditional UPDATE keyed by id+token+expiry, so the same
+        token can't be replayed, a token past its expiry is rejected, and the
+        result can only ever be the specific account that owned that token."""
+        verified_flag = "TRUE" if self._backend == "postgresql" else "1"
+        with self._transaction() as db:
+            candidate = self._execute(
+                db, "SELECT id FROM users WHERE verification_token=?", (token,)
+            ).fetchone()
+            if candidate is None:
+                return None
+            user_id = candidate["id"]
+            cursor = self._execute(
+                db,
+                f"UPDATE users SET email_verified={verified_flag}, verification_token=NULL, verification_expires_at=NULL "
+                "WHERE id=? AND verification_token=? AND verification_expires_at > ?",
+                (user_id, token, now),
+            )
+            if cursor.rowcount != 1:
+                return None
+            row = self._execute(db, "SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+    def downgrade_expired_tier(self, user: dict[str, Any]) -> dict[str, Any]:
+        """If this user's paid tier has an expiry in the past, atomically revert
+        them to free. Returns the (possibly updated) user row unchanged otherwise."""
+        if user["tier"] not in ("pro", "enterprise") or not user["tier_expires_at"]:
+            return user
+        if user["tier_expires_at"] >= _now():
+            return user
+        with self._transaction() as db:
+            cursor = self._execute(
+                db,
+                "UPDATE users SET tier='free', tier_expires_at=NULL WHERE id=? AND tier_expires_at IS NOT NULL AND tier_expires_at < ?",
+                (user["id"], _now()),
+            )
+            if cursor.rowcount != 1:
+                return user
+        return self.get_user_by_id(user["id"]) or user
 
     def get_and_increment_usage(self, *, user_id: str, period: str, limit: int | None) -> int | None:
         """Atomically increments and returns the new run_count, or returns None
@@ -917,6 +1023,60 @@ class ResearchStore:
                 db, "SELECT run_count FROM usage_counters WHERE user_id=? AND period=?", (user_id, period)
             ).fetchone()
         return row["run_count"] if row else 0
+
+    def get_and_increment_signup_attempts(self, *, ip: str, window_key: str, limit: int) -> int | None:
+        """Atomically increments and returns the new attempt_count for this ip+window,
+        or returns None (without incrementing) if the increment would exceed `limit`."""
+        counter_id = f"sgr_{uuid.uuid4().hex}"
+        with self._transaction() as db:
+            if self._backend == "postgresql":
+                self._execute(db,
+                    "INSERT INTO signup_rate_counters (id, ip, window_key, attempt_count) VALUES (?, ?, ?, 0) "
+                    "ON CONFLICT (ip, window_key) DO NOTHING",
+                    (counter_id, ip, window_key),
+                )
+            else:
+                self._execute(db,
+                    "INSERT OR IGNORE INTO signup_rate_counters (id, ip, window_key, attempt_count) VALUES (?, ?, ?, 0)",
+                    (counter_id, ip, window_key),
+                )
+            cursor = self._execute(db,
+                "UPDATE signup_rate_counters SET attempt_count = attempt_count + 1 WHERE ip=? AND window_key=? AND attempt_count < ?",
+                (ip, window_key, limit),
+            )
+            if cursor.rowcount != 1:
+                return None
+            row = self._execute(
+                db, "SELECT attempt_count FROM signup_rate_counters WHERE ip=? AND window_key=?", (ip, window_key)
+            ).fetchone()
+        return row["attempt_count"]
+
+    def get_and_increment_resend_attempts(self, *, user_id: str, window_key: str, limit: int) -> int | None:
+        """Same atomic conditional-UPDATE pattern as get_and_increment_signup_attempts,
+        keyed by user_id — throttles POST /v1/auth/resend-verification per account."""
+        counter_id = f"rvr_{uuid.uuid4().hex}"
+        with self._transaction() as db:
+            if self._backend == "postgresql":
+                self._execute(db,
+                    "INSERT INTO resend_verification_counters (id, user_id, window_key, attempt_count) VALUES (?, ?, ?, 0) "
+                    "ON CONFLICT (user_id, window_key) DO NOTHING",
+                    (counter_id, user_id, window_key),
+                )
+            else:
+                self._execute(db,
+                    "INSERT OR IGNORE INTO resend_verification_counters (id, user_id, window_key, attempt_count) VALUES (?, ?, ?, 0)",
+                    (counter_id, user_id, window_key),
+                )
+            cursor = self._execute(db,
+                "UPDATE resend_verification_counters SET attempt_count = attempt_count + 1 WHERE user_id=? AND window_key=? AND attempt_count < ?",
+                (user_id, window_key, limit),
+            )
+            if cursor.rowcount != 1:
+                return None
+            row = self._execute(
+                db, "SELECT attempt_count FROM resend_verification_counters WHERE user_id=? AND window_key=?", (user_id, window_key)
+            ).fetchone()
+        return row["attempt_count"]
 
     def get_quota_usage(self) -> list[dict[str, Any]]:
         with self._transaction() as db:

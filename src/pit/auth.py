@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -16,6 +17,13 @@ PLANS: dict[str, dict[str, Any]] = {
 }
 
 _ACCESS_TOKEN_TTL = timedelta(days=7)
+
+VERIFICATION_TOKEN_TTL = timedelta(hours=24)
+DEFAULT_TIER_DURATION_DAYS: dict[str, int] = {"pro": 30, "enterprise": 30}
+
+
+def generate_verification_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 class TokenError(RuntimeError):

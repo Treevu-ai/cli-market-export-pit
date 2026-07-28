@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -24,9 +25,10 @@ _load_env_file()
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from . import auth
+from . import email as email_service
 from .climarket import CLIMarketConnector
 from .climatiq import ClimatiqConnector
 from .bcrp import BCRPConnector
@@ -91,9 +93,28 @@ class FichaCreate(BaseModel):
     market_label: Annotated[str | None, Field(max_length=120)] = None
 
 
+_PASSWORD_SPECIAL_CHARS = "!@#$%^&*()_+-=[]{}|;:,.<>?/~`\"'\\"
+
+
+def _validate_password_strength(password: str) -> str:
+    if any(char.isspace() for char in password):
+        raise ValueError("password must not contain spaces")
+    if not any(char.isupper() for char in password):
+        raise ValueError("password must contain at least one uppercase letter")
+    if not any(char.islower() for char in password):
+        raise ValueError("password must contain at least one lowercase letter")
+    if not any(char.isdigit() for char in password):
+        raise ValueError("password must contain at least one digit")
+    if not any(char in _PASSWORD_SPECIAL_CHARS for char in password):
+        raise ValueError("password must contain at least one special character (e.g. # % ! @)")
+    return password
+
+
 class SignupCreate(BaseModel):
     email: EmailStr
     password: Annotated[str, Field(min_length=8, max_length=200)]
+
+    _validate_password = field_validator("password")(_validate_password_strength)
 
 
 class LoginCreate(BaseModel):
@@ -104,6 +125,7 @@ class LoginCreate(BaseModel):
 class SetTierCreate(BaseModel):
     email: EmailStr
     tier: Annotated[str, Field(pattern=r"^(free|pro|enterprise)$")]
+    expires_in_days: Annotated[int, Field(ge=1, le=3650)] | None = None
 
 
 def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerator]:
@@ -283,9 +305,14 @@ def create_app(
         user = research_service.store.get_user_by_id(payload["sub"])
         if user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-        return user
+        return research_service.store.downgrade_expired_tier(user)
 
     def require_quota(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
+        if not user["email_verified"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "email_not_verified", "message": "Verify your email before running analyses"},
+            )
         plan = auth.PLANS.get(user["tier"], auth.PLANS["free"])
         limit = plan["monthly_limit"]
         period = auth.current_period()
@@ -318,19 +345,101 @@ def create_app(
         if not admin_secret or not provided or not secrets.compare_digest(provided, admin_secret):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin secret")
 
+    SIGNUP_RATE_LIMIT_PER_IP = 5
+
+    def _client_ip(request: Request) -> str:
+        # Only trust Fly.io's own edge-injected header — it is stripped/overwritten
+        # by Fly's proxy for any inbound request, so it cannot be spoofed by a client
+        # sending its own copy. We deliberately do NOT fall back to X-Forwarded-For,
+        # which is client-suppliable and would let an attacker forge a fresh "IP" on
+        # every request to bypass this limiter entirely.
+        fly_ip = request.headers.get("fly-client-ip")
+        raw_ip = fly_ip or (request.client.host if request.client else "unknown")
+        try:
+            return ipaddress.ip_address(raw_ip).compressed
+        except ValueError:
+            return "unknown"
+
+    def require_signup_rate_limit(request: Request) -> None:
+        ip = _client_ip(request)
+        window_key = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        try:
+            new_count = research_service.store.get_and_increment_signup_attempts(
+                ip=ip, window_key=window_key, limit=SIGNUP_RATE_LIMIT_PER_IP
+            )
+        except Exception as error:
+            logging.getLogger(__name__).error("signup rate limit check failed: %s", error)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Signup is temporarily unavailable. Please try again shortly.",
+            ) from error
+        if new_count is None:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many signup attempts from this address. Try again later.",
+            )
+
     @app.get("/v1/health")
     def health_check() -> dict[str, str]:
         return {"status": "ok", "version": "0.1.0"}
 
-    @app.post("/v1/auth/signup", status_code=status.HTTP_201_CREATED)
+    def _new_verification_token() -> tuple[str, str]:
+        token = auth.generate_verification_token()
+        expires_at = (datetime.now(timezone.utc) + auth.VERIFICATION_TOKEN_TTL).isoformat()
+        return token, expires_at
+
+    def _dispatch_verification_email(*, to: str, token: str) -> None:
+        try:
+            email_service.send_verification_email(to=to, token=token)
+        except email_service.EmailSendError as error:
+            logging.getLogger(__name__).error("failed to send verification email to %s: %s", to, error)
+
+    def _resend_verification_email(user: dict[str, Any]) -> None:
+        token, expires_at = _new_verification_token()
+        research_service.store.set_verification_token(user_id=user["id"], token=token, expires_at=expires_at)
+        _dispatch_verification_email(to=user["email"], token=token)
+
+    @app.post("/v1/auth/signup", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_signup_rate_limit)])
     def signup(payload: SignupCreate, response: Response) -> dict[str, Any]:
         if research_service.store.get_user_by_email(payload.email) is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
         password_hash = auth.hash_password(payload.password)
-        user = research_service.store.create_user(email=payload.email, password_hash=password_hash)
+        verification_token, verification_expires_at = _new_verification_token()
+        user = research_service.store.create_user(
+            email=payload.email,
+            password_hash=password_hash,
+            verification_token=verification_token,
+            verification_expires_at=verification_expires_at,
+        )
+        _dispatch_verification_email(to=user["email"], token=verification_token)
         token = auth.create_access_token(user_id=user["id"], email=user["email"])
         _set_session_cookie(response, token)
         return _envelope({"token": token, "email": user["email"], "tier": user["tier"]})
+
+    @app.get("/v1/auth/verify")
+    def verify_email(token: str) -> dict[str, Any]:
+        user = research_service.store.verify_email(token=token, now=datetime.now(timezone.utc).isoformat())
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification link")
+        return _envelope({"email": user["email"], "email_verified": True})
+
+    RESEND_VERIFICATION_LIMIT_PER_HOUR = 3
+
+    @app.post("/v1/auth/resend-verification")
+    def resend_verification(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
+        if user["email_verified"]:
+            return _envelope({"already_verified": True})
+        window_key = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        new_count = research_service.store.get_and_increment_resend_attempts(
+            user_id=user["id"], window_key=window_key, limit=RESEND_VERIFICATION_LIMIT_PER_HOUR
+        )
+        if new_count is None:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many resend attempts. Try again later.",
+            )
+        _resend_verification_email(user)
+        return _envelope({"sent": True})
 
     @app.post("/v1/auth/login")
     def login(payload: LoginCreate, response: Response) -> dict[str, Any]:
@@ -354,6 +463,8 @@ def create_app(
         return _envelope({
             "email": user["email"],
             "tier": user["tier"],
+            "email_verified": bool(user["email_verified"]),
+            "tier_expires_at": user["tier_expires_at"],
             "usage": {"used": used, "limit": plan["monthly_limit"], "period": period},
         })
 
@@ -362,8 +473,13 @@ def create_app(
         user = research_service.store.get_user_by_email(payload.email)
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
-        updated = research_service.store.set_user_tier(user["id"], payload.tier)
-        return _envelope({"email": updated["email"], "tier": updated["tier"]})
+        if payload.tier == "free":
+            expires_at = None
+        else:
+            duration_days = payload.expires_in_days or auth.DEFAULT_TIER_DURATION_DAYS.get(payload.tier, 30)
+            expires_at = (datetime.now(timezone.utc) + timedelta(days=duration_days)).isoformat()
+        updated = research_service.store.set_user_tier(user["id"], payload.tier, expires_at=expires_at)
+        return _envelope({"email": updated["email"], "tier": updated["tier"], "tier_expires_at": updated["tier_expires_at"]})
 
     @app.post("/v1/research-runs", status_code=status.HTTP_201_CREATED)
     def create_research_run(payload: ResearchRunCreate, _user: dict[str, Any] = Depends(require_quota)) -> dict[str, Any]:

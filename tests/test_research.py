@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -556,15 +557,20 @@ class SuccessfulBCRPConnector:
 class ResearchServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         os.environ["PIT_JWT_SECRET"] = "test-jwt-secret-for-unit-tests-only-32b"
+        self._email_patcher = mock.patch("pit.api.email_service.send_verification_email")
+        self.mock_send_verification_email = self._email_patcher.start()
 
     def tearDown(self) -> None:
+        self._email_patcher.stop()
         os.environ.pop("PIT_JWT_SECRET", None)
 
     def _signup_and_login(
-        self, client: TestClient, email: str = "user@example.com", password: str = "testpass123"
+        self, client: TestClient, email: str = "user@example.com", password: str = "Testpass123!"
     ) -> str:
         response = client.post("/v1/auth/signup", json={"email": email, "password": password})
         assert response.status_code == 201, response.text
+        _, kwargs = self.mock_send_verification_email.call_args
+        client.get(f"/v1/auth/verify?token={kwargs['token']}")
         return response.json()["data"]["token"]
 
     def _service(

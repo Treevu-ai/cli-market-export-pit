@@ -10,8 +10,10 @@ import {
   loadRecentRuns,
   runFullPipeline,
   saveRecentRun,
+  resendVerificationEmail,
   MARKET_COVERAGE,
   QuotaExceededError,
+  EmailNotVerifiedError,
   type MeResponse,
   type ReportData,
   type RecentRun,
@@ -64,6 +66,7 @@ export function AnalyzeConsole() {
   const [session, setSession] = useState<MeResponse | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [quotaNotice, setQuotaNotice] = useState<QuotaExceededError | null>(null);
+  const [verificationResent, setVerificationResent] = useState(false);
 
   useEffect(() => {
     const q = searchParams.get("query");
@@ -123,10 +126,18 @@ export function AnalyzeConsole() {
       setStatus("error");
       if (error instanceof QuotaExceededError) {
         setQuotaNotice(error);
+      } else if (error instanceof EmailNotVerifiedError) {
+        getMe().then(setSession).catch(() => {});
       } else {
         setErrorMessage(error instanceof Error ? error.message : String(error));
       }
     }
+  }
+
+  async function handleResendVerification() {
+    setVerificationResent(false);
+    await resendVerificationEmail();
+    setVerificationResent(true);
   }
 
   async function handleGenerateFicha(segment: string, stage: string) {
@@ -175,6 +186,19 @@ export function AnalyzeConsole() {
                   {t("console.inicioSesion.haveAccount")}
                 </a>
               </div>
+            </div>
+          )}
+          {session && !session.email_verified && (
+            <div className="border border-foreground/10 bg-foreground/[0.02] p-6 text-sm">
+              <h2 className="font-display text-lg">{t("console.verifyBanner.title")}</h2>
+              <p className="mt-2 text-muted-foreground">{t("console.verifyBanner.description")}</p>
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                className="mt-4 rounded-full border border-foreground/20 px-4 py-2 text-xs"
+              >
+                {verificationResent ? t("console.verifyBanner.resendSent") : t("console.verifyBanner.resend")}
+              </button>
             </div>
           )}
           {session && (
@@ -287,7 +311,11 @@ export function AnalyzeConsole() {
 
             <button
               type="submit"
-              disabled={status === "running" || (sessionChecked && !session)}
+              disabled={
+                status === "running" ||
+                (sessionChecked && !session) ||
+                Boolean(session && !session.email_verified)
+              }
               className="w-full rounded-full bg-[#64ffda] px-5 py-3 text-sm font-medium text-[#0a192f] transition-opacity disabled:opacity-40"
             >
               {status === "running" ? t("console.form.submitRunning") : t("console.form.submitIdle")}

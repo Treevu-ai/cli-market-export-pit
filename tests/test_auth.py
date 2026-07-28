@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -33,20 +34,32 @@ class AuthTests(unittest.TestCase):
     def setUp(self) -> None:
         os.environ["PIT_JWT_SECRET"] = "test-jwt-secret-for-unit-tests-only-32b"
         os.environ["PIT_ADMIN_SECRET"] = "test-admin-secret"
+        self._email_patcher = mock.patch("pit.api.email_service.send_verification_email")
+        self.mock_send_verification_email = self._email_patcher.start()
 
     def tearDown(self) -> None:
+        self._email_patcher.stop()
         os.environ.pop("PIT_JWT_SECRET", None)
         os.environ.pop("PIT_ADMIN_SECRET", None)
+
+    def _last_verification_token(self) -> str:
+        _, kwargs = self.mock_send_verification_email.call_args
+        return kwargs["token"]
 
     def _client(self, directory: str) -> TestClient:
         store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
         service = ResearchService(store, SuccessfulConnector())
         return TestClient(create_app(service))
 
+    def _client_and_store(self, directory: str) -> tuple[TestClient, ResearchStore]:
+        store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+        service = ResearchService(store, SuccessfulConnector())
+        return TestClient(create_app(service)), store
+
     def test_signup_creates_free_tier_user_and_returns_token(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)
-            response = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "testpass123"})
+            response = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
             self.assertEqual(response.status_code, 201)
             data = response.json()["data"]
             self.assertEqual(data["tier"], "free")
@@ -55,29 +68,29 @@ class AuthTests(unittest.TestCase):
     def test_signup_rejects_duplicate_email(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)
-            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "testpass123"})
-            response = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "otherpass123"})
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            response = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Otherpass123!"})
             self.assertEqual(response.status_code, 409)
 
     def test_login_succeeds_with_correct_password(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)
-            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "testpass123"})
-            response = client.post("/v1/auth/login", json={"email": "a@b.com", "password": "testpass123"})
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            response = client.post("/v1/auth/login", json={"email": "a@b.com", "password": "Testpass123!"})
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.json()["data"]["token"])
 
     def test_login_rejects_wrong_password(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)
-            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "testpass123"})
-            response = client.post("/v1/auth/login", json={"email": "a@b.com", "password": "wrongpass123"})
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            response = client.post("/v1/auth/login", json={"email": "a@b.com", "password": "Wrongpass123!"})
             self.assertEqual(response.status_code, 401)
 
     def test_login_rejects_unknown_email(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)
-            response = client.post("/v1/auth/login", json={"email": "nobody@b.com", "password": "testpass123"})
+            response = client.post("/v1/auth/login", json={"email": "nobody@b.com", "password": "Testpass123!"})
             self.assertEqual(response.status_code, 401)
 
     def test_me_requires_valid_token(self) -> None:
@@ -91,7 +104,7 @@ class AuthTests(unittest.TestCase):
     def test_me_returns_tier_and_usage_with_valid_token(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)
-            signup = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "testpass123"})
+            signup = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
             token = signup.json()["data"]["token"]
             response = client.get("/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
             self.assertEqual(response.status_code, 200)
@@ -101,10 +114,23 @@ class AuthTests(unittest.TestCase):
             self.assertEqual(data["usage"]["used"], 0)
             self.assertEqual(data["usage"]["limit"], 5)
 
+    def test_signup_rate_limited_after_five_attempts_from_same_ip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            for i in range(5):
+                response = client.post(
+                    "/v1/auth/signup", json={"email": f"user{i}@b.com", "password": "Testpass123!"}
+                )
+                self.assertEqual(response.status_code, 201)
+            response = client.post(
+                "/v1/auth/signup", json={"email": "user5@b.com", "password": "Testpass123!"}
+            )
+            self.assertEqual(response.status_code, 429)
+
     def test_set_tier_requires_admin_secret(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)
-            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "testpass123"})
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
             response = client.post("/v1/admin/set-tier", json={"email": "a@b.com", "tier": "pro"})
             self.assertEqual(response.status_code, 401)
             response = client.post(
@@ -113,6 +139,156 @@ class AuthTests(unittest.TestCase):
                 headers={"X-Admin-Secret": "test-admin-secret"},
             )
             self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["data"]["tier"], "pro")
+
+    def test_signup_sends_verification_email_and_starts_unverified(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client, store = self._client_and_store(directory)
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            self.mock_send_verification_email.assert_called_once()
+            _, kwargs = self.mock_send_verification_email.call_args
+            self.assertEqual(kwargs["to"], "a@b.com")
+            self.assertTrue(kwargs["token"])
+            user = store.get_user_by_email("a@b.com")
+            self.assertFalse(user["email_verified"])
+
+    def test_verify_email_marks_verified_and_token_cannot_be_reused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            token = self._last_verification_token()
+            response = client.get(f"/v1/auth/verify?token={token}")
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json()["data"]["email_verified"])
+            replay = client.get(f"/v1/auth/verify?token={token}")
+            self.assertEqual(replay.status_code, 400)
+
+    def test_verify_email_rejects_unknown_token(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            response = client.get("/v1/auth/verify?token=not-a-real-token")
+            self.assertEqual(response.status_code, 400)
+
+    def test_verify_email_rejects_expired_token(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client, store = self._client_and_store(directory)
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            token = self._last_verification_token()
+            user = store.get_user_by_email("a@b.com")
+            store.set_verification_token(user_id=user["id"], token=token, expires_at="2000-01-01T00:00:00+00:00")
+            response = client.get(f"/v1/auth/verify?token={token}")
+            self.assertEqual(response.status_code, 400)
+
+    def test_require_quota_blocks_unverified_user_even_with_quota_remaining(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            signup = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            token = signup.json()["data"]["token"]
+            response = client.post(
+                "/v1/research-runs",
+                json={"query": "cocoa", "limit": 5},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            self.assertEqual(response.status_code, 403)
+            self.assertEqual(response.json()["detail"]["code"], "email_not_verified")
+
+    def test_resend_verification_is_noop_when_already_verified(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            signup = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            token = signup.json()["data"]["token"]
+            verification_token = self._last_verification_token()
+            client.get(f"/v1/auth/verify?token={verification_token}")
+            response = client.post("/v1/auth/resend-verification", headers={"Authorization": f"Bearer {token}"})
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json()["data"]["already_verified"])
+            self.mock_send_verification_email.assert_called_once()  # not called a second time
+
+    def test_resend_verification_regenerates_token_when_unverified(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            signup = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            token = signup.json()["data"]["token"]
+            first_verification_token = self._last_verification_token()
+            response = client.post("/v1/auth/resend-verification", headers={"Authorization": f"Bearer {token}"})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(self.mock_send_verification_email.call_count, 2)
+            second_verification_token = self._last_verification_token()
+            self.assertNotEqual(first_verification_token, second_verification_token)
+            # the old token is invalidated once a new one is issued
+            self.assertEqual(client.get(f"/v1/auth/verify?token={first_verification_token}").status_code, 400)
+            self.assertEqual(client.get(f"/v1/auth/verify?token={second_verification_token}").status_code, 200)
+
+    def test_resend_verification_rate_limited_after_three_attempts_per_hour(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            signup = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            token = signup.json()["data"]["token"]
+            for _ in range(3):
+                response = client.post("/v1/auth/resend-verification", headers={"Authorization": f"Bearer {token}"})
+                self.assertEqual(response.status_code, 200)
+            fourth = client.post("/v1/auth/resend-verification", headers={"Authorization": f"Bearer {token}"})
+            self.assertEqual(fourth.status_code, 429)
+
+    def test_new_signup_is_not_falsely_grandfathered_by_reinitialize(self) -> None:
+        # Regression test: verification_token is now set in the SAME insert as
+        # user creation (create_user), so a fresh signup can never be observed
+        # with a NULL token — re-running initialize() (as happens on every
+        # process boot) must not flip it to verified.
+        with tempfile.TemporaryDirectory() as directory:
+            client, store = self._client_and_store(directory)
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            store.initialize()
+            user = store.get_user_by_email("a@b.com")
+            self.assertFalse(user["email_verified"])
+            self.assertIsNotNone(user["verification_token"])
+
+    def test_set_tier_applies_default_and_custom_expiry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            default_expiry = client.post(
+                "/v1/admin/set-tier",
+                json={"email": "a@b.com", "tier": "pro"},
+                headers={"X-Admin-Secret": "test-admin-secret"},
+            )
+            self.assertIsNotNone(default_expiry.json()["data"]["tier_expires_at"])
+
+            custom_expiry = client.post(
+                "/v1/admin/set-tier",
+                json={"email": "a@b.com", "tier": "pro", "expires_in_days": 7},
+                headers={"X-Admin-Secret": "test-admin-secret"},
+            )
+            self.assertIsNotNone(custom_expiry.json()["data"]["tier_expires_at"])
+
+            back_to_free = client.post(
+                "/v1/admin/set-tier",
+                json={"email": "a@b.com", "tier": "free"},
+                headers={"X-Admin-Secret": "test-admin-secret"},
+            )
+            self.assertIsNone(back_to_free.json()["data"]["tier_expires_at"])
+
+    def test_expired_pro_tier_auto_downgrades_to_free_on_next_request(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client, store = self._client_and_store(directory)
+            signup = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            token = signup.json()["data"]["token"]
+            user = store.get_user_by_email("a@b.com")
+            store.set_user_tier(user["id"], "pro", expires_at="2000-01-01T00:00:00+00:00")
+            response = client.get("/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+            self.assertEqual(response.status_code, 200)
+            data = response.json()["data"]
+            self.assertEqual(data["tier"], "free")
+            self.assertIsNone(data["tier_expires_at"])
+
+    def test_active_pro_tier_is_not_downgraded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client, store = self._client_and_store(directory)
+            signup = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
+            token = signup.json()["data"]["token"]
+            user = store.get_user_by_email("a@b.com")
+            store.set_user_tier(user["id"], "pro", expires_at="2999-01-01T00:00:00+00:00")
+            response = client.get("/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
             self.assertEqual(response.json()["data"]["tier"], "pro")
 
 

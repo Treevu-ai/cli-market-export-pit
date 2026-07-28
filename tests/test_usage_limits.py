@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -32,8 +33,11 @@ class UsageLimitTests(unittest.TestCase):
     def setUp(self) -> None:
         os.environ["PIT_JWT_SECRET"] = "test-jwt-secret-for-unit-tests-only-32b"
         os.environ["PIT_ADMIN_SECRET"] = "test-admin-secret"
+        self._email_patcher = mock.patch("pit.api.email_service.send_verification_email")
+        self.mock_send_verification_email = self._email_patcher.start()
 
     def tearDown(self) -> None:
+        self._email_patcher.stop()
         os.environ.pop("PIT_JWT_SECRET", None)
         os.environ.pop("PIT_ADMIN_SECRET", None)
 
@@ -41,7 +45,9 @@ class UsageLimitTests(unittest.TestCase):
         store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
         service = ResearchService(store, SuccessfulConnector())
         client = TestClient(create_app(service))
-        signup = client.post("/v1/auth/signup", json={"email": email, "password": "testpass123"})
+        signup = client.post("/v1/auth/signup", json={"email": email, "password": "Testpass123!"})
+        _, kwargs = self.mock_send_verification_email.call_args
+        client.get(f"/v1/auth/verify?token={kwargs['token']}")
         return client, signup.json()["data"]["token"]
 
     def _run(self, client: TestClient, token: str):
@@ -91,8 +97,10 @@ class UsageLimitTests(unittest.TestCase):
     def test_two_users_have_independent_quotas(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client, token_a = self._client_and_token(directory, email="a@b.com")
-            signup_b = client.post("/v1/auth/signup", json={"email": "b@b.com", "password": "testpass123"})
+            signup_b = client.post("/v1/auth/signup", json={"email": "b@b.com", "password": "Testpass123!"})
             token_b = signup_b.json()["data"]["token"]
+            _, kwargs_b = self.mock_send_verification_email.call_args
+            client.get(f"/v1/auth/verify?token={kwargs_b['token']}")
             for _ in range(5):
                 self.assertEqual(self._run(client, token_a).status_code, 201)
             self.assertEqual(self._run(client, token_a).status_code, 402)

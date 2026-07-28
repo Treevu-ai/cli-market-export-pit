@@ -36,6 +36,12 @@ export class QuotaExceededError extends Error {
   }
 }
 
+export class EmailNotVerifiedError extends Error {
+  constructor(message?: string) {
+    super(message || "Verify your email before running analyses");
+  }
+}
+
 export async function pitRequest<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -50,6 +56,9 @@ export async function pitRequest<T = unknown>(path: string, options: RequestInit
   if (!response.ok) {
     if (response.status === 402 && payload.detail && typeof payload.detail === "object") {
       throw new QuotaExceededError(payload.detail);
+    }
+    if (response.status === 403 && payload.detail?.code === "email_not_verified") {
+      throw new EmailNotVerifiedError(payload.detail.message);
     }
     const detail = payload.detail || payload.message || response.statusText;
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
@@ -212,6 +221,8 @@ export interface AuthSession {
 export interface MeResponse {
   email: string;
   tier: string;
+  email_verified: boolean;
+  tier_expires_at: string | null;
   usage: { used: number; limit: number | null; period: string };
 }
 
@@ -238,4 +249,15 @@ export async function logout(): Promise<void> {
 export async function getMe(): Promise<MeResponse> {
   const envelope = await pitRequest<{ data: MeResponse }>("/v1/auth/me");
   return envelope.data;
+}
+
+export async function verifyEmail(token: string): Promise<{ email: string; email_verified: boolean }> {
+  const envelope = await pitRequest<{ data: { email: string; email_verified: boolean } }>(
+    `/v1/auth/verify?token=${encodeURIComponent(token)}`
+  );
+  return envelope.data;
+}
+
+export async function resendVerificationEmail(): Promise<void> {
+  await pitRequest("/v1/auth/resend-verification", { method: "POST" });
 }
