@@ -60,6 +60,12 @@ _SEED_SYNONYMS: list[tuple[str, str]] = [
     ("alcachofas", "artichoke"),
     ("alcaucil", "artichoke"),
     ("artichoke", "artichoke"),
+    ("aji", "chili_pepper"),
+    ("ají", "chili_pepper"),
+    ("aji panca", "chili_pepper"),
+    ("ají panca", "chili_pepper"),
+    ("chili pepper", "chili_pepper"),
+    ("dried chili", "chili_pepper"),
 ]
 
 _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
@@ -79,6 +85,7 @@ _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
     ("chia", "120799", "Chia seeds, other oil seeds n.e.s."),
     ("camu_camu", "081190", "Camu camu pulp, frozen"),
     ("artichoke", "070991", "Fresh or chilled globe artichokes"),
+    ("chili_pepper", "090421", "Dried chili peppers (ají panca), neither crushed nor ground"),
 ]
 
 

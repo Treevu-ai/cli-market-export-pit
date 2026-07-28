@@ -151,6 +151,8 @@ export const es = {
       "Camu camu": "Camu camu",
       Chía: "Chía",
       Alcachofa: "Alcachofa",
+      "Ají panca": "Ají panca",
+      Espárrago: "Espárrago",
     },
     statCategoriesLabel: "Categorías con caso real",
     statMarketLabel: "Cualquier mercado destino",
