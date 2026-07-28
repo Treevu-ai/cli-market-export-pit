@@ -24,6 +24,7 @@ from .efsa_eurlex import EFSALexConnector, EFSALexRequestError
 from .fooddata_central import FoodDataCentralConnector, FoodDataCentralRequestError
 from .climatiq import ClimatiqConnector, ClimatiqRequestError
 from .climarket import CLIMarketConnector, CLIMarketRequestError
+from .bcrp import BCRPConnector, BCRPRequestError
 from .taxonomy import ensure_default_taxonomy, expand_query_with_synonyms, resolve_hs_code
 
 
@@ -98,6 +99,7 @@ class ResearchService:
         fooddata_connector: FoodDataCentralConnector | None = None,
         climatiq_connector: ClimatiqConnector | None = None,
         commerce_connector: CLIMarketConnector | None = None,
+        bcrp_connector: BCRPConnector | None = None,
     ) -> None:
         self.store = store
         self.science_connector = science_connector
@@ -115,6 +117,7 @@ class ResearchService:
         self.fooddata_connector = fooddata_connector
         self.climatiq_connector = climatiq_connector
         self.commerce_connector = commerce_connector
+        self.bcrp_connector = bcrp_connector
 
     def run_science_research(
         self,
@@ -976,6 +979,95 @@ class ResearchService:
             },
         )
 
+    def enrich_with_bcrp(self, *, run_id: str, limit: int) -> dict[str, Any]:
+        if self.bcrp_connector is None:
+            raise RuntimeError("BCRP connector is not configured")
+        request_id: str | None = None
+        try:
+            response = self.bcrp_connector.search()
+            request_id = self.store.start_source_request(
+                research_run_id=run_id,
+                source=self.bcrp_connector.source,
+                request_url=response.request_url,
+                request_params=response.request_params,
+                license_name=self.bcrp_connector.license_name,
+            )
+            self.store.finish_source_request(
+                request_id=request_id,
+                http_status=response.http_status,
+                raw_content=response.raw_content,
+            )
+            works = response.works[:limit]
+            for work in works:
+                self._store_bcrp_work(run_id=run_id, request_id=request_id, work=work)
+            self._save_bcrp_summary(run_id=run_id, works=works)
+        except BCRPRequestError as error:
+            if request_id is None:
+                request_id = self.store.start_source_request(
+                    research_run_id=run_id,
+                    source=self.bcrp_connector.source,
+                    request_url=error.request_url or self.bcrp_connector.base_url,
+                    request_params=error.request_params or {},
+                    license_name=self.bcrp_connector.license_name,
+                )
+            self.store.fail_source_request(
+                request_id=request_id,
+                http_status=error.http_status,
+                error=str(error),
+                raw_content=error.raw_content,
+            )
+            raise ResearchExecutionError(run_id, str(error)) from error
+        return self.store.get_run_detail(run_id)
+
+    def _store_bcrp_work(self, *, run_id: str, request_id: str, work: dict[str, Any]) -> None:
+        external_id = str(work.get("external_id") or "").strip()
+        title = str(work.get("title") or "").strip()
+        if not external_id or not title:
+            return
+        normalized = {
+            "external_id": external_id,
+            "title": title,
+            "series_code": work.get("series_code"),
+            "series_name": work.get("series_name"),
+            "period": work.get("period"),
+            "value": work.get("value"),
+            "source": work.get("source", "bcrp"),
+        }
+        self.store.add_evidence(
+            research_run_id=run_id,
+            source_request_id=request_id,
+            source="bcrp",
+            domain="macro",
+            external_id=external_id,
+            title=title,
+            published_at=None,
+            geography="PE",
+            payload=normalized,
+            dedupe_key=f"bcrp:{external_id}".strip().casefold(),
+        )
+
+    def _save_bcrp_summary(self, *, run_id: str, works: list[dict[str, Any]]) -> None:
+        by_series: dict[str, dict[str, Any]] = {}
+        for work in works:
+            code = work.get("series_code")
+            if not code:
+                continue
+            by_series[code] = {
+                "code": code,
+                "name": work.get("series_name"),
+                "latest_period": work.get("period"),
+                "latest_value": work.get("value"),
+            }
+        self.store.save_domain_summary(
+            research_run_id=run_id,
+            domain="macro",
+            summary_type="bcrp_aggregation",
+            payload={
+                "series": list(by_series.values()),
+                "periods_count": len(works),
+            },
+        )
+
     def run_full_pipeline(
         self,
         *,
@@ -1004,6 +1096,7 @@ class ResearchService:
             ("trend", lambda: self.enrich_with_trend(run_id=run_id, limit=limit)),
             ("trade", lambda: self.enrich_with_trade(run_id=run_id, limit=limit, hs_code=hs_code)),
             ("commerce", lambda: self.enrich_with_commerce(run_id=run_id, limit=limit)),
+            ("bcrp", lambda: self.enrich_with_bcrp(run_id=run_id, limit=limit)),
             ("regulatory", lambda: self.enrich_with_regulatory(run_id=run_id, limit=limit)),
             ("sustainability", lambda: self.enrich_with_sustainability(run_id=run_id, limit=limit)),
             ("techscout", lambda: self.enrich_with_techscout(run_id=run_id, limit=limit)),

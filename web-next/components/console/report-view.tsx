@@ -37,6 +37,14 @@ const COMPLEMENTARY_KEYS: Record<string, { title: string; detail: (data: any) =>
     detail: (data) =>
       data?.total_projects != null ? `${data.total_projects} proyectos (CORDIS, NIH, NSF)` : "Sin proyectos de I+D",
   },
+  bcrp_aggregation: {
+    title: "Contexto macro (BCRP)",
+    detail: (data) => {
+      const series = data?.series?.[0];
+      if (!series) return "Sin datos macro del BCRP";
+      return `${series.name}: ${series.latest_value} (${series.latest_period})`;
+    },
+  },
 };
 
 type Props = {

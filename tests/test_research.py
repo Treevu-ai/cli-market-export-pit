@@ -22,6 +22,7 @@ from pit.fooddata_central import FoodDataCentralResponse
 from pit.nih_reporter import NIHReporterRequestError
 from pit.climatiq import ClimatiqResponse
 from pit.climarket import CLIMarketResponse
+from pit.bcrp import BCRPResponse
 from pit.pubmed import PubMedResponse
 from pit.research import ResearchExecutionError, ResearchService, _crossref_publication_date
 from pit.scoring import ScoringService
@@ -526,6 +527,31 @@ class CLIMarketConnectorWithFailedIntelBrief:
         )
 
 
+class SuccessfulBCRPConnector:
+    source = "bcrp"
+    license_name = "BCRP public statistics API; no auth required"
+    base_url = "https://estadisticas.bcrp.gob.pe"
+
+    def search(self, *, series_codes=None, months_back: int = 12, language: str = "esp") -> BCRPResponse:
+        return BCRPResponse(
+            request_url="https://estadisticas.bcrp.gob.pe/estadisticas/series/api/PN01207PM/json/2026-1/2026-2/esp",
+            request_params={"series_codes": ["PN01207PM"], "start_period": "2026-1", "end_period": "2026-2"},
+            http_status=200,
+            raw_content=b'{"config":{"series":[{"name":"Tipo de cambio","dec":"3"}]},"periods":[{"name":"Ene.2026","values":["3.36"]}]}',
+            works=[
+                {
+                    "external_id": "bcrp:PN01207PM:Ene.2026",
+                    "title": "Tipo de cambio — Ene.2026",
+                    "series_code": "PN01207PM",
+                    "series_name": "Tipo de cambio",
+                    "period": "Ene.2026",
+                    "value": "3.36",
+                    "source": "bcrp",
+                },
+            ],
+        )
+
+
 class ResearchServiceTests(unittest.TestCase):
     def _service(
         self,
@@ -545,6 +571,7 @@ class ResearchServiceTests(unittest.TestCase):
         fooddata_connector=None,
         climatiq_connector=None,
         commerce_connector=None,
+        bcrp_connector=None,
     ) -> tuple[ResearchStore, ResearchService]:
         store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
         return store, ResearchService(
@@ -564,6 +591,7 @@ class ResearchServiceTests(unittest.TestCase):
             fooddata_connector,
             climatiq_connector,
             commerce_connector,
+            bcrp_connector,
         )
 
     def test_persists_immutable_raw_response_and_normalized_evidence(self) -> None:
@@ -1109,6 +1137,45 @@ class ResearchServiceTests(unittest.TestCase):
             compare_sources = [s for s in enriched["sources"] if s["source"] == "cli_market"]
             self.assertEqual(len(compare_sources), 1)
             self.assertEqual(compare_sources[0]["status"], "completed")
+
+    def test_bcrp_enrichment_stores_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, service = self._service(
+                directory,
+                SuccessfulConnector(),
+                bcrp_connector=SuccessfulBCRPConnector(),
+            )
+            initial = service.run_science_research(
+                query="organic blueberry",
+                target_market="US",
+                application="fresh fruit export",
+                cutoff_at="2026-07-24T00:00:00+00:00",
+                from_publication_date="2021-01-01",
+                limit=10,
+            )
+            enriched = service.enrich_with_bcrp(run_id=initial["id"], limit=10)
+            macro_evidence = [e for e in enriched["evidence"] if e["domain"] == "macro"]
+            self.assertEqual(len(macro_evidence), 1)
+            self.assertEqual(macro_evidence[0]["external_id"], "bcrp:PN01207PM:Ene.2026")
+            summaries = enriched.get("summaries", {})
+            self.assertIn("bcrp_aggregation", summaries)
+            self.assertEqual(summaries["bcrp_aggregation"]["periods_count"], 1)
+            self.assertEqual(summaries["bcrp_aggregation"]["series"][0]["code"], "PN01207PM")
+
+    def test_bcrp_enrichment_not_configured_is_skipped_by_full_pipeline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, service = self._service(directory, SuccessfulConnector())
+            result = service.run_full_pipeline(
+                query="organic blueberry",
+                target_market="US",
+                application="fresh fruit export",
+                cutoff_at="2026-07-24T00:00:00+00:00",
+                from_publication_date="2021-01-01",
+                limit=10,
+            )
+            self.assertEqual(result["status"], "completed")
+            macro_evidence = [e for e in result["evidence"] if e["domain"] == "macro"]
+            self.assertEqual(macro_evidence, [])
 
     def test_full_pipeline_endpoint_runs_science_step(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from .climarket import CLIMarketConnector
 from .climatiq import ClimatiqConnector
+from .bcrp import BCRPConnector
 from .comtrade import ComtradeConnector
 from .cordis import CORDISConnector
 from .crossref import CrossrefConnector
@@ -116,6 +117,7 @@ def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerato
         FoodDataCentralConnector(api_key=os.getenv("FOODDATA_CENTRAL_API_KEY")),
         ClimatiqConnector(api_key=os.getenv("CLIMATIQ_API_KEY")),
         CLIMarketConnector(),
+        BCRPConnector(),
     )
     return service, ScoringService(store), ReportGenerator()
 
