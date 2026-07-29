@@ -86,6 +86,19 @@ _SEED_SYNONYMS: list[tuple[str, str]] = [
     ("goldenberry", "goldenberry"),
     ("cape gooseberry", "goldenberry"),
     ("physalis", "goldenberry"),
+    ("curcuma", "turmeric"),
+    ("cúrcuma", "turmeric"),
+    ("curcuma en polvo", "turmeric"),
+    ("turmeric", "turmeric"),
+    ("higo", "fig"),
+    ("higos", "fig"),
+    ("fig", "fig"),
+    ("figs", "fig"),
+    ("maracuya", "passion_fruit"),
+    ("maracuyá", "passion_fruit"),
+    ("pulpa de maracuya", "passion_fruit"),
+    ("passion fruit", "passion_fruit"),
+    ("passionfruit", "passion_fruit"),
 ]
 
 _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
@@ -110,6 +123,9 @@ _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
     ("lime", "080550", "Fresh or dried lemons and limes"),
     ("paprika", "090422", "Paprika: fruits of the genus Capsicum, crushed or ground"),
     ("goldenberry", "081090", "Fresh goldenberry (aguaymanto/physalis), other fresh fruit n.e.s. (basket code, not exclusive)"),
+    ("turmeric", "091030", "Turmeric (curcuma)"),
+    ("fig", "080420", "Figs, fresh or dried"),
+    ("passion_fruit", "200899", "Passion fruit pulp/preparations, other prepared or preserved fruit n.e.s. (basket code, not exclusive)"),
 ]
 
 

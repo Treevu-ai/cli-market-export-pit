@@ -174,6 +174,39 @@ class TaxonomyTests(unittest.TestCase):
             )
             self.assertEqual(hs, "081090")
 
+    def test_resolve_hs_code_for_turmeric_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="curcuma en polvo organico",
+            )
+            self.assertEqual(hs, "091030")
+
+    def test_resolve_hs_code_for_fig_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="higos frescos para exportacion",
+            )
+            self.assertEqual(hs, "080420")
+
+    def test_resolve_hs_code_for_passion_fruit_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="pulpa de maracuya congelada",
+            )
+            self.assertEqual(hs, "200899")
+
 
 if __name__ == "__main__":
     unittest.main()
