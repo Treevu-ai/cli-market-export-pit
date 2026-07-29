@@ -139,7 +139,7 @@ class ResearchStore:
                     "CREATE TABLE IF NOT EXISTS domain_scores (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, domain TEXT NOT NULL, score INTEGER NOT NULL, confidence TEXT NOT NULL, weight REAL NOT NULL, coverage REAL NOT NULL, created_at TEXT NOT NULL, UNIQUE(research_run_id, domain))",
                     "CREATE TABLE IF NOT EXISTS opportunity_scores (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, score_version TEXT NOT NULL, opportunity_score REAL NOT NULL, coverage_factor REAL NOT NULL, recommendation TEXT NOT NULL, alerts TEXT NOT NULL, exclusions TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(research_run_id))",
                     "CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, format TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL)",
-                    "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, tier TEXT NOT NULL DEFAULT 'free', created_at TEXT NOT NULL)",
+                    "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, tier TEXT NOT NULL DEFAULT 'free', token_version INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)",
                     "CREATE TABLE IF NOT EXISTS usage_counters (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, period TEXT NOT NULL, run_count INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, period))",
                     "CREATE TABLE IF NOT EXISTS signup_rate_counters (id TEXT PRIMARY KEY, ip TEXT NOT NULL, window_key TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, UNIQUE(ip, window_key))",
                     "CREATE TABLE IF NOT EXISTS resend_verification_counters (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, window_key TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id, window_key))",
@@ -155,6 +155,7 @@ class ResearchStore:
                 self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_expires_at TEXT")
                 self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS tier_expires_at TEXT")
                 self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'es'")
+                self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0")
                 self._execute(db, "CREATE INDEX IF NOT EXISTS idx_users_verification_token ON users(verification_token)")
                 # Grandfather pre-existing accounts as verified: only rows that never
                 # received a verification_token (i.e. created before this migration)
@@ -318,6 +319,7 @@ class ResearchStore:
                         email TEXT NOT NULL UNIQUE,
                         password_hash TEXT NOT NULL,
                         tier TEXT NOT NULL DEFAULT 'free',
+                        token_version INTEGER NOT NULL DEFAULT 0,
                         created_at TEXT NOT NULL
                     );
 
@@ -368,6 +370,7 @@ class ResearchStore:
                     "ALTER TABLE users ADD COLUMN verification_expires_at TEXT",
                     "ALTER TABLE users ADD COLUMN tier_expires_at TEXT",
                     "ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT 'es'",
+                    "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0",
                 ):
                     try:
                         db.execute(stmt)
@@ -954,6 +957,13 @@ class ResearchStore:
     def set_user_tier(self, user_id: str, tier: str, *, expires_at: str | None = None) -> dict[str, Any] | None:
         with self._transaction() as db:
             self._execute(db, "UPDATE users SET tier=?, tier_expires_at=? WHERE id=?", (tier, expires_at, user_id))
+        return self.get_user_by_id(user_id)
+
+    def bump_token_version(self, user_id: str) -> dict[str, Any] | None:
+        # Invalidates every JWT ever issued for this account — logout is a
+        # full session kill, not just "delete this one browser's cookie".
+        with self._transaction() as db:
+            self._execute(db, "UPDATE users SET token_version = token_version + 1 WHERE id=?", (user_id,))
         return self.get_user_by_id(user_id)
 
     def set_verification_token(self, *, user_id: str, token: str, expires_at: str) -> None:

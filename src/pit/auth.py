@@ -45,11 +45,12 @@ def _jwt_secret() -> str:
     return secret
 
 
-def create_access_token(*, user_id: str, email: str) -> str:
+def create_access_token(*, user_id: str, email: str, token_version: int) -> str:
     now = datetime.now(UTC)
     payload = {
         "sub": user_id,
         "email": email,
+        "tv": token_version,
         "iat": now,
         "exp": now + _ACCESS_TOKEN_TTL,
     }

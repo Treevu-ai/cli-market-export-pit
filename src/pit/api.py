@@ -314,6 +314,12 @@ def create_app(
         user = research_service.store.get_user_by_id(payload["sub"])
         if user is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        if payload.get("tv") != user["token_version"]:
+            # Token predates the account's current token_version — either
+            # revoked by a logout since this token was issued, or forged.
+            # Same error as an expired token: revoked and expired should be
+            # indistinguishable to a caller.
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session")
         return research_service.store.downgrade_expired_tier(user)
 
     def require_quota(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
@@ -448,7 +454,7 @@ def create_app(
             verification_expires_at=verification_expires_at,
         )
         _dispatch_verification_email(to=user["email"], token=verification_token, locale=user["locale"])
-        token = auth.create_access_token(user_id=user["id"], email=user["email"])
+        token = auth.create_access_token(user_id=user["id"], email=user["email"], token_version=user["token_version"])
         _set_session_cookie(response, token)
         return _envelope({"token": token, "email": user["email"], "tier": user["tier"]})
 
@@ -503,12 +509,25 @@ def create_app(
         user = research_service.store.get_user_by_email(payload.email)
         if user is None or not auth.verify_password(payload.password, user["password_hash"]):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-        token = auth.create_access_token(user_id=user["id"], email=user["email"])
+        token = auth.create_access_token(user_id=user["id"], email=user["email"], token_version=user["token_version"])
         _set_session_cookie(response, token)
         return _envelope({"token": token, "email": user["email"], "tier": user["tier"]})
 
     @app.post("/v1/auth/logout", dependencies=[Depends(require_csrf)])
-    def logout(response: Response) -> dict[str, Any]:
+    def logout(request: Request, response: Response) -> dict[str, Any]:
+        # Best-effort revocation: if the presented session is still valid,
+        # bump token_version to invalidate every JWT issued for this account
+        # (not just the one used to log out — a real session kill, not just
+        # clearing this one browser's cookies). But cookies must always be
+        # cleared, even for an already-expired/invalid session — a user
+        # clicking "log out" on a stale tab should never be left with dead
+        # cookies just because the session died first.
+        try:
+            user = get_current_user(request)
+        except HTTPException:
+            pass
+        else:
+            research_service.store.bump_token_version(user["id"])
         response.delete_cookie("pit_session", secure=True, samesite="none")
         response.delete_cookie("pit_csrf", secure=True, samesite="none")
         return _envelope({"logged_out": True})

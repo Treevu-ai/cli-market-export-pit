@@ -183,6 +183,75 @@ class AuthTests(unittest.TestCase):
             )
             self.assertEqual(with_csrf.status_code, 201)
 
+    def test_logout_revokes_the_token_that_was_used_to_log_out(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            client.post("/v1/auth/signup", json={"email": "revoke@b.com", "password": "Testpass123!"})
+            login = client.post("/v1/auth/login", json={"email": "revoke@b.com", "password": "Testpass123!"})
+            token = login.json()["data"]["token"]
+            headers = {"Authorization": f"Bearer {token}"}
+
+            still_good = client.get("/v1/auth/me", headers=headers)
+            self.assertEqual(still_good.status_code, 200)
+
+            logout = client.post("/v1/auth/logout", headers=headers)
+            self.assertEqual(logout.status_code, 200)
+
+            # The exact token that was valid a moment ago must now be dead —
+            # logout has to actually kill the session server-side, not just
+            # tell the browser to forget its cookie.
+            after_logout = client.get("/v1/auth/me", headers=headers)
+            self.assertEqual(after_logout.status_code, 401)
+
+    def test_logout_clears_cookies_even_when_the_session_is_already_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            service = ResearchService(store, SuccessfulConnector())
+            client = TestClient(create_app(service), base_url="https://testserver")
+            client.post("/v1/auth/signup", json={"email": "stale@b.com", "password": "Testpass123!"})
+            client.post("/v1/auth/login", json={"email": "stale@b.com", "password": "Testpass123!"})
+            self.assertIn("pit_session", client.cookies)
+
+            # Simulate a stale tab: the session token is no longer valid
+            # (corrupted here; in practice this would be natural 7-day
+            # expiry or a revoked token_version), but the CSRF cookie —
+            # unrelated to token_version — is still present, exactly like a
+            # real stale-tab scenario.
+            client.cookies.set("pit_session", "not-a-real-token")
+            csrf_token = client.cookies["pit_csrf"]
+
+            response = client.post("/v1/auth/logout", headers={"X-CSRF-Token": csrf_token})
+            self.assertEqual(response.status_code, 200)
+            # Cookies must still be cleared — a user clicking "log out" on a
+            # dead session should never be left with stale cookies. Checked
+            # via the raw Set-Cookie headers rather than the client-side
+            # cookie jar, since httpx's jar reconciliation for a manually
+            # injected cookie value isn't representative of real deletion.
+            set_cookie_headers = response.headers.get_list("set-cookie")
+            self.assertTrue(any("pit_session=" in h and "Max-Age=0" in h for h in set_cookie_headers))
+            self.assertTrue(any("pit_csrf=" in h and "Max-Age=0" in h for h in set_cookie_headers))
+
+    def test_logout_revokes_every_other_active_session_for_the_account(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            client = self._client(directory)
+            client.post("/v1/auth/signup", json={"email": "multi-device@b.com", "password": "Testpass123!"})
+
+            # Two independent logins = two independent tokens, as if the same
+            # account were signed in on two devices.
+            login_a = client.post("/v1/auth/login", json={"email": "multi-device@b.com", "password": "Testpass123!"})
+            login_b = client.post("/v1/auth/login", json={"email": "multi-device@b.com", "password": "Testpass123!"})
+            token_a = login_a.json()["data"]["token"]
+            token_b = login_b.json()["data"]["token"]
+
+            # Logging out with device A's token must also kill device B's
+            # session — "log out" means the account is logged out everywhere,
+            # not just on the device that clicked it.
+            logout = client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token_a}"})
+            self.assertEqual(logout.status_code, 200)
+
+            device_b_after = client.get("/v1/auth/me", headers={"Authorization": f"Bearer {token_b}"})
+            self.assertEqual(device_b_after.status_code, 401)
+
     def test_me_requires_valid_token(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)
