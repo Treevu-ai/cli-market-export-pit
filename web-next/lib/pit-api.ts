@@ -42,13 +42,20 @@ export class EmailNotVerifiedError extends Error {
   }
 }
 
-// Double-submit CSRF cookie set by the backend on signup/login alongside
-// pit_session — deliberately readable by JS (not httpOnly) so it can be
-// echoed back as a header the backend compares against the cookie value.
-function getCsrfCookie(): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/(?:^|;\s*)pit_csrf=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+// CSRF token, held in memory only (never localStorage/cookie). The backend
+// delivers it in the JSON body of signup/login/me responses rather than a
+// cookie: frontend and backend live on different subdomains in production,
+// and a cookie set by the backend's origin is invisible to frontend JS via
+// document.cookie regardless of httpOnly — a real double-submit cookie
+// can't work across that boundary. Being in-memory means a page reload
+// loses it, but every page that cares about auth state already calls
+// getMe() on mount, which re-populates it.
+let cachedCsrfToken: string | null = null;
+
+function rememberCsrfToken(token: unknown): void {
+  if (typeof token === "string" && token) {
+    cachedCsrfToken = token;
+  }
 }
 
 export async function pitRequest<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
@@ -60,9 +67,8 @@ export async function pitRequest<T = unknown>(path: string, options: RequestInit
   if (typeof window !== "undefined" && window.PIT_API_KEY) {
     headers["X-API-Key"] = window.PIT_API_KEY;
   }
-  const csrfToken = getCsrfCookie();
-  if (csrfToken) {
-    headers["X-CSRF-Token"] = csrfToken;
+  if (cachedCsrfToken) {
+    headers["X-CSRF-Token"] = cachedCsrfToken;
   }
   const response = await fetch(`${getApiBase()}${path}`, { ...options, headers, credentials: "include" });
   const payload = await response.json().catch(() => ({}));
@@ -227,6 +233,7 @@ export function saveRecentRun(entry: RecentRun): RecentRun[] {
 
 export interface AuthSession {
   token: string;
+  csrf_token: string;
   email: string;
   tier: string;
 }
@@ -234,6 +241,7 @@ export interface AuthSession {
 export interface MeResponse {
   email: string;
   tier: string;
+  csrf_token: string;
   email_verified: boolean;
   tier_expires_at: string | null;
   usage: { used: number; limit: number | null; period: string };
@@ -244,6 +252,7 @@ export async function signup(email: string, password: string, locale: "es" | "en
     method: "POST",
     body: JSON.stringify({ email, password, locale }),
   });
+  rememberCsrfToken(envelope.data.csrf_token);
   return envelope.data;
 }
 
@@ -252,15 +261,18 @@ export async function login(email: string, password: string): Promise<AuthSessio
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
+  rememberCsrfToken(envelope.data.csrf_token);
   return envelope.data;
 }
 
 export async function logout(): Promise<void> {
   await pitRequest("/v1/auth/logout", { method: "POST" });
+  cachedCsrfToken = null;
 }
 
 export async function getMe(): Promise<MeResponse> {
   const envelope = await pitRequest<{ data: MeResponse }>("/v1/auth/me");
+  rememberCsrfToken(envelope.data.csrf_token);
   return envelope.data;
 }
 

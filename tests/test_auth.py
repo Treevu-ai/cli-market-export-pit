@@ -134,7 +134,7 @@ class AuthTests(unittest.TestCase):
             response = client.post("/v1/auth/login", json={"email": "nobody@b.com", "password": "Testpass123!"})
             self.assertEqual(response.status_code, 401)
 
-    def test_login_sets_a_csrf_cookie_and_cookie_authenticated_requests_require_it(self) -> None:
+    def test_login_returns_a_csrf_token_and_cookie_authenticated_requests_require_it(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
             service = ResearchService(store, SuccessfulConnector())
@@ -145,7 +145,13 @@ class AuthTests(unittest.TestCase):
             client.post("/v1/auth/signup", json={"email": "csrf@b.com", "password": "Testpass123!"})
             login = client.post("/v1/auth/login", json={"email": "csrf@b.com", "password": "Testpass123!"})
             self.assertEqual(login.status_code, 200)
-            self.assertIn("pit_csrf", client.cookies)
+            # The CSRF token travels in the response body, not a cookie — a
+            # cookie set by the backend's origin would be invisible to
+            # frontend JS on a different origin (the real production setup),
+            # so a real double-submit cookie can't work here. See
+            # auth.generate_csrf_token for the stateless HMAC design.
+            csrf_token = login.json()["data"]["csrf_token"]
+            self.assertTrue(csrf_token)
 
             # Cookie-authenticated (no Authorization header) POST with no CSRF header is rejected.
             missing_header = client.post("/v1/auth/logout")
@@ -155,8 +161,7 @@ class AuthTests(unittest.TestCase):
             wrong_header = client.post("/v1/auth/logout", headers={"X-CSRF-Token": "not-the-real-token"})
             self.assertEqual(wrong_header.status_code, 403)
 
-            # The real double-submit token succeeds.
-            csrf_token = client.cookies["pit_csrf"]
+            # The real token succeeds.
             ok = client.post("/v1/auth/logout", headers={"X-CSRF-Token": csrf_token})
             self.assertEqual(ok.status_code, 200)
 
@@ -170,6 +175,7 @@ class AuthTests(unittest.TestCase):
             client.get(f"/v1/auth/verify?token={token}")
             login = client.post("/v1/auth/login", json={"email": "csrf-run@b.com", "password": "Testpass123!"})
             self.assertEqual(login.status_code, 200)
+            csrf_token = login.json()["data"]["csrf_token"]
 
             # Cookie-authenticated (no Authorization header, relying purely on
             # the ambient pit_session cookie) with no CSRF header is rejected —
@@ -177,7 +183,6 @@ class AuthTests(unittest.TestCase):
             no_csrf = client.post("/v1/research-runs", json={"query": "cocoa", "limit": 5})
             self.assertEqual(no_csrf.status_code, 403)
 
-            csrf_token = client.cookies["pit_csrf"]
             with_csrf = client.post(
                 "/v1/research-runs", json={"query": "cocoa", "limit": 5}, headers={"X-CSRF-Token": csrf_token}
             )
@@ -213,23 +218,22 @@ class AuthTests(unittest.TestCase):
             self.assertIn("pit_session", client.cookies)
 
             # Simulate a stale tab: the session token is no longer valid
-            # (corrupted here; in practice this would be natural 7-day
-            # expiry or a revoked token_version), but the CSRF cookie —
-            # unrelated to token_version — is still present, exactly like a
-            # real stale-tab scenario.
+            # (corrupted here; in practice this would be natural 7-day expiry
+            # or a revoked token_version). With no resolvable user, logout
+            # skips the CSRF check entirely (there's no user to derive the
+            # expected token from) and goes straight to clearing cookies —
+            # no X-CSRF-Token header needed for this case at all.
             client.cookies.set("pit_session", "not-a-real-token")
-            csrf_token = client.cookies["pit_csrf"]
 
-            response = client.post("/v1/auth/logout", headers={"X-CSRF-Token": csrf_token})
+            response = client.post("/v1/auth/logout")
             self.assertEqual(response.status_code, 200)
             # Cookies must still be cleared — a user clicking "log out" on a
             # dead session should never be left with stale cookies. Checked
-            # via the raw Set-Cookie headers rather than the client-side
+            # via the raw Set-Cookie header rather than the client-side
             # cookie jar, since httpx's jar reconciliation for a manually
             # injected cookie value isn't representative of real deletion.
             set_cookie_headers = response.headers.get_list("set-cookie")
             self.assertTrue(any("pit_session=" in h and "Max-Age=0" in h for h in set_cookie_headers))
-            self.assertTrue(any("pit_csrf=" in h and "Max-Age=0" in h for h in set_cookie_headers))
 
     def test_logout_revokes_every_other_active_session_for_the_account(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

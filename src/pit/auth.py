@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -62,6 +64,19 @@ def decode_access_token(token: str) -> dict[str, Any]:
         return jwt.decode(token, _jwt_secret(), algorithms=["HS256"])
     except jwt.PyJWTError as error:
         raise TokenError(str(error)) from error
+
+
+def generate_csrf_token(*, user_id: str, token_version: int) -> str:
+    # Stateless, deterministic per (user, token_version) — the server can
+    # always recompute the expected value without storing anything, and it
+    # rotates automatically on logout (token_version bump) same as sessions.
+    # Delivered via the JSON response body at signup/login/me, NOT a cookie:
+    # frontend and backend live on different subdomains in production, and a
+    # cookie set by the backend's origin is invisible to frontend JS via
+    # document.cookie regardless of the httpOnly flag — a real double-submit
+    # cookie can't work across that boundary.
+    message = f"{user_id}:{token_version}".encode()
+    return hmac.new(_jwt_secret().encode("utf-8"), message, hashlib.sha256).hexdigest()
 
 
 def current_period() -> str:

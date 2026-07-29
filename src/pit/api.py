@@ -353,21 +353,8 @@ def create_app(
             samesite="none",
             max_age=7 * 24 * 3600,
         )
-        # Double-submit CSRF cookie: deliberately NOT httponly, since the
-        # frontend must read it and echo it back as the X-CSRF-Token header.
-        # Its security property comes from same-origin policy — a hostile
-        # cross-site page's JS cannot read this cookie to forge the header,
-        # even though the browser still auto-attaches the cookie itself.
-        response.set_cookie(
-            "pit_csrf",
-            secrets.token_urlsafe(32),
-            httponly=False,
-            secure=True,
-            samesite="none",
-            max_age=7 * 24 * 3600,
-        )
 
-    def require_csrf(request: Request) -> None:
+    def _verify_csrf(request: Request, user: dict[str, Any]) -> None:
         # Bearer-token clients (non-browser API consumers, and this project's
         # own test suite) aren't cookie-authenticated, so a cross-site page
         # can't ride their credentials — CSRF only applies to the ambient
@@ -375,10 +362,13 @@ def create_app(
         authorization = request.headers.get("authorization")
         if authorization and authorization.lower().startswith("bearer "):
             return
-        cookie_token = request.cookies.get("pit_csrf")
         header_token = request.headers.get("x-csrf-token")
-        if not cookie_token or not header_token or not secrets.compare_digest(cookie_token, header_token):
+        expected = auth.generate_csrf_token(user_id=user["id"], token_version=user["token_version"])
+        if not header_token or not secrets.compare_digest(header_token, expected):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing or invalid CSRF token")
+
+    def require_csrf(request: Request, user: dict[str, Any] = Depends(get_current_user)) -> None:
+        _verify_csrf(request, user)
 
     def require_admin(request: Request) -> None:
         admin_secret = os.getenv("PIT_ADMIN_SECRET")
@@ -456,7 +446,8 @@ def create_app(
         _dispatch_verification_email(to=user["email"], token=verification_token, locale=user["locale"])
         token = auth.create_access_token(user_id=user["id"], email=user["email"], token_version=user["token_version"])
         _set_session_cookie(response, token)
-        return _envelope({"token": token, "email": user["email"], "tier": user["tier"]})
+        csrf_token = auth.generate_csrf_token(user_id=user["id"], token_version=user["token_version"])
+        return _envelope({"token": token, "csrf_token": csrf_token, "email": user["email"], "tier": user["tier"]})
 
     @app.get("/v1/auth/verify")
     def verify_email(token: str) -> dict[str, Any]:
@@ -511,9 +502,10 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
         token = auth.create_access_token(user_id=user["id"], email=user["email"], token_version=user["token_version"])
         _set_session_cookie(response, token)
-        return _envelope({"token": token, "email": user["email"], "tier": user["tier"]})
+        csrf_token = auth.generate_csrf_token(user_id=user["id"], token_version=user["token_version"])
+        return _envelope({"token": token, "csrf_token": csrf_token, "email": user["email"], "tier": user["tier"]})
 
-    @app.post("/v1/auth/logout", dependencies=[Depends(require_csrf)])
+    @app.post("/v1/auth/logout")
     def logout(request: Request, response: Response) -> dict[str, Any]:
         # Best-effort revocation: if the presented session is still valid,
         # bump token_version to invalidate every JWT issued for this account
@@ -521,15 +513,18 @@ def create_app(
         # clearing this one browser's cookies). But cookies must always be
         # cleared, even for an already-expired/invalid session — a user
         # clicking "log out" on a stale tab should never be left with dead
-        # cookies just because the session died first.
+        # cookies just because the session died first. A valid session still
+        # must present a correct CSRF token to actually trigger the
+        # revocation+cookie-clear, same protection every other mutating
+        # cookie-authenticated route gets via require_csrf.
         try:
             user = get_current_user(request)
         except HTTPException:
-            pass
-        else:
+            user = None
+        if user is not None:
+            _verify_csrf(request, user)
             research_service.store.bump_token_version(user["id"])
         response.delete_cookie("pit_session", secure=True, samesite="none")
-        response.delete_cookie("pit_csrf", secure=True, samesite="none")
         return _envelope({"logged_out": True})
 
     @app.get("/v1/auth/me")
@@ -537,9 +532,11 @@ def create_app(
         plan = auth.PLANS.get(user["tier"], auth.PLANS["free"])
         period = auth.current_period()
         used = research_service.store.get_usage(user_id=user["id"], period=period)
+        csrf_token = auth.generate_csrf_token(user_id=user["id"], token_version=user["token_version"])
         return _envelope({
             "email": user["email"],
             "tier": user["tier"],
+            "csrf_token": csrf_token,
             "email_verified": bool(user["email_verified"]),
             "tier_expires_at": user["tier_expires_at"],
             "usage": {"used": used, "limit": plan["monthly_limit"], "period": period},
