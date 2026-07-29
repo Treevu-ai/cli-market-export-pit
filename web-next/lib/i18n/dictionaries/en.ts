@@ -278,8 +278,7 @@ export const en = {
     priceMax: "Maximum price",
     storesCompared: "stores compared",
     shelfProducts: "shelf products (CLI Market)",
-    complementaryEvidence: "Complementary evidence",
-    noComplementary: "No complementary data in this analysis.",
+    evidenceDetail: "Evidence by domain",
     improveTitle: "How to improve this analysis",
     sourcesTraceability: "Source traceability",
     fichaTitle: "Opportunity dossier",
@@ -303,11 +302,40 @@ export const en = {
       technology_scout: "R&D and projects",
     },
     noDomains: "No scored domains in this analysis.",
-    complementaryKeys: {
-      comtrade: "Foreign trade",
-      climatiq: "Sustainability",
-      techscout: "R&D and projects",
-      bcrp: "Macro context (BCRP)",
+    trend: {
+      growing: "Growing",
+      declining: "Declining",
+      stable: "Stable",
+    },
+    evidence: {
+      science: {
+        topicsFound: "topics found",
+        empty: "No relevant scientific publications in this analysis.",
+      },
+      patent: {
+        count: "patents",
+        empty: "No patents found in this analysis.",
+      },
+      trend: {
+        newsVolume: "news items",
+        empty: "No trend signals in this analysis.",
+      },
+      trade: {
+        records: "trade records",
+        empty: "No foreign trade data in this analysis.",
+      },
+      techscout: {
+        count: "R&D projects",
+        empty: "No R&D projects in this analysis.",
+      },
+      sustainability: {
+        count: "footprint activities",
+        empty: "No sustainability data in this analysis.",
+      },
+      macro: {
+        title: "Macro context (BCRP)",
+        empty: "No BCRP macro data in this analysis.",
+      },
     },
   },
   auth: {

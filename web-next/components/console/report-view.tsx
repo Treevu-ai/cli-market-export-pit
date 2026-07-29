@@ -8,6 +8,7 @@ import {
 } from "@/lib/pit-api";
 import { ScoreGauge } from "./score-gauge";
 import { DomainGrid } from "./domain-grid";
+import { EvidenceGrid } from "./evidence-grid";
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const TONE_CLASSES: Record<string, string> = {
@@ -23,47 +24,14 @@ const PRIORITY_CLASSES: Record<string, string> = {
   low: "text-muted-foreground",
 };
 
-const COMPLEMENTARY_KEY_TO_I18N: Record<string, string> = {
-  comtrade_aggregation: "comtrade",
-  climatiq_aggregation: "climatiq",
-  techscout_aggregation: "techscout",
-  bcrp_aggregation: "bcrp",
-};
-
 type Props = {
   report: ReportData;
   fichaAvailable: boolean;
   onGenerateFicha: (segment: string, stage: string) => Promise<string | null>;
 };
 
-function buildComplementaryDetail(key: string, data: any, locale: "es" | "en"): string {
-  if (key === "comtrade_aggregation") {
-    return locale === "es"
-      ? `${data.trade_records_count ?? 0} registros · tendencia ${data.trend ?? "—"} (Comtrade)`
-      : `${data.trade_records_count ?? 0} records · trend ${data.trend ?? "—"} (Comtrade)`;
-  }
-  if (key === "climatiq_aggregation") {
-    if (data?.activity_count == null) return locale === "es" ? "Sin datos de carbono" : "No carbon data";
-    return locale === "es"
-      ? `${data.activity_count} actividades de huella (Climatiq)`
-      : `${data.activity_count} footprint activities (Climatiq)`;
-  }
-  if (key === "techscout_aggregation") {
-    if (data?.total_projects == null) return locale === "es" ? "Sin proyectos de I+D" : "No R&D projects";
-    return locale === "es"
-      ? `${data.total_projects} proyectos (CORDIS, NIH, NSF)`
-      : `${data.total_projects} projects (CORDIS, NIH, NSF)`;
-  }
-  if (key === "bcrp_aggregation") {
-    const series = data?.series?.[0];
-    if (!series) return locale === "es" ? "Sin datos macro del BCRP" : "No BCRP macro data";
-    return `${series.name}: ${series.latest_value} (${series.latest_period})`;
-  }
-  return "";
-}
-
 export function ReportView({ report, fichaAvailable, onGenerateFicha }: Props) {
-  const { t, locale } = useLocale();
+  const { t } = useLocale();
   const [showJson, setShowJson] = useState(false);
   const [fichaMarkdown, setFichaMarkdown] = useState("");
   const [fichaSegment, setFichaSegment] = useState("exportadores y retail premium");
@@ -76,10 +44,6 @@ export function ReportView({ report, fichaAvailable, onGenerateFicha }: Props) {
   const summaries = report.evidence_summary || {};
   const regulatory = summaries.regulatory_aggregation;
   const commerce = summaries.climarket_aggregation;
-
-  const complementary = Object.entries(COMPLEMENTARY_KEY_TO_I18N)
-    .map(([key, i18nKey]) => [key, i18nKey, summaries[key]] as const)
-    .filter(([, , data]) => data != null);
 
   async function handleGenerateFicha() {
     setFichaGenerating(true);
@@ -143,6 +107,12 @@ export function ReportView({ report, fichaAvailable, onGenerateFicha }: Props) {
         <DomainGrid dimensions={score.dimensions || {}} />
       </section>
 
+      {/* Evidence detail per domain */}
+      <section>
+        <h2 className="mb-4 font-display text-xl">{t("report.evidenceDetail")}</h2>
+        <EvidenceGrid summaries={summaries} />
+      </section>
+
       {/* Regulatory + commerce */}
       <section className="grid gap-4 md:grid-cols-2">
         <div className="border border-foreground/10 p-6">
@@ -193,23 +163,6 @@ export function ReportView({ report, fichaAvailable, onGenerateFicha }: Props) {
             <p className="text-sm text-muted-foreground">{t("report.noCommerce")}</p>
           )}
         </div>
-      </section>
-
-      {/* Complementary */}
-      <section>
-        <h2 className="mb-4 font-display text-xl">{t("report.complementaryEvidence")}</h2>
-        {complementary.length ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {complementary.map(([key, i18nKey, data]) => (
-              <div key={key} className="border border-foreground/10 bg-foreground/[0.02] p-4">
-                <strong className="mb-1 block font-display text-sm">{t(`report.complementaryKeys.${i18nKey}`)}</strong>
-                <p className="text-sm text-muted-foreground">{buildComplementaryDetail(key, data, locale)}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t("report.noComplementary")}</p>
-        )}
       </section>
 
       {/* Checklist */}
