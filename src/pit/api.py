@@ -265,6 +265,13 @@ def _handle_research_error(error: ResearchExecutionError) -> None:
     ) from error
 
 
+def _check_run_ownership(run: dict[str, Any], user: dict[str, Any]) -> None:
+    # 404, not 403: a non-owner should not be able to distinguish "run exists
+    # but isn't yours" from "run doesn't exist" — that alone leaks information.
+    if run.get("user_id") != user["id"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+
+
 def create_app(
     service: ResearchService | None = None,
     scoring_service: ScoringService | None = None,
@@ -340,6 +347,32 @@ def create_app(
             samesite="none",
             max_age=7 * 24 * 3600,
         )
+        # Double-submit CSRF cookie: deliberately NOT httponly, since the
+        # frontend must read it and echo it back as the X-CSRF-Token header.
+        # Its security property comes from same-origin policy — a hostile
+        # cross-site page's JS cannot read this cookie to forge the header,
+        # even though the browser still auto-attaches the cookie itself.
+        response.set_cookie(
+            "pit_csrf",
+            secrets.token_urlsafe(32),
+            httponly=False,
+            secure=True,
+            samesite="none",
+            max_age=7 * 24 * 3600,
+        )
+
+    def require_csrf(request: Request) -> None:
+        # Bearer-token clients (non-browser API consumers, and this project's
+        # own test suite) aren't cookie-authenticated, so a cross-site page
+        # can't ride their credentials — CSRF only applies to the ambient
+        # pit_session cookie.
+        authorization = request.headers.get("authorization")
+        if authorization and authorization.lower().startswith("bearer "):
+            return
+        cookie_token = request.cookies.get("pit_csrf")
+        header_token = request.headers.get("x-csrf-token")
+        if not cookie_token or not header_token or not secrets.compare_digest(cookie_token, header_token):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing or invalid CSRF token")
 
     def require_admin(request: Request) -> None:
         admin_secret = os.getenv("PIT_ADMIN_SECRET")
@@ -428,7 +461,7 @@ def create_app(
 
     RESEND_VERIFICATION_LIMIT_PER_HOUR = 3
 
-    @app.post("/v1/auth/resend-verification")
+    @app.post("/v1/auth/resend-verification", dependencies=[Depends(require_csrf)])
     def resend_verification(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
         if user["email_verified"]:
             return _envelope({"already_verified": True})
@@ -474,9 +507,10 @@ def create_app(
         _set_session_cookie(response, token)
         return _envelope({"token": token, "email": user["email"], "tier": user["tier"]})
 
-    @app.post("/v1/auth/logout")
+    @app.post("/v1/auth/logout", dependencies=[Depends(require_csrf)])
     def logout(response: Response) -> dict[str, Any]:
         response.delete_cookie("pit_session", secure=True, samesite="none")
+        response.delete_cookie("pit_csrf", secure=True, samesite="none")
         return _envelope({"logged_out": True})
 
     @app.get("/v1/auth/me")
@@ -507,10 +541,11 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
         return _envelope({"email": updated["email"], "tier": updated["tier"], "tier_expires_at": updated["tier_expires_at"]})
 
-    @app.post("/v1/research-runs", status_code=status.HTTP_201_CREATED)
-    def create_research_run(payload: ResearchRunCreate, _user: dict[str, Any] = Depends(require_quota)) -> dict[str, Any]:
+    @app.post("/v1/research-runs", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_csrf)])
+    def create_research_run(payload: ResearchRunCreate, user: dict[str, Any] = Depends(require_quota)) -> dict[str, Any]:
         try:
             run = research_service.run_science_research(
+                user_id=user["id"],
                 query=payload.query,
                 target_market=payload.target_market,
                 application=payload.application,
@@ -522,10 +557,11 @@ def create_app(
             _handle_research_error(error)
         return _envelope(run)
 
-    @app.post("/v1/research-runs/full", status_code=status.HTTP_201_CREATED)
-    def create_full_research_run(payload: ResearchRunFullCreate, _user: dict[str, Any] = Depends(require_quota)) -> dict[str, Any]:
+    @app.post("/v1/research-runs/full", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_csrf)])
+    def create_full_research_run(payload: ResearchRunFullCreate, user: dict[str, Any] = Depends(require_quota)) -> dict[str, Any]:
         try:
             run = research_service.run_full_pipeline(
+                user_id=user["id"],
                 query=payload.query,
                 target_market=payload.target_market,
                 application=payload.application,
@@ -539,22 +575,29 @@ def create_app(
         return _envelope(run)
 
     @app.get("/v1/research-runs/{run_id}")
-    async def get_research_run(run_id: str) -> dict[str, Any]:
+    async def get_research_run(run_id: str, user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
         try:
             run = research_service.store.get_run_detail(run_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+        _check_run_ownership(run, user)
         return _envelope(run)
 
-    @app.post("/v1/research-runs/{run_id}/enrich/{domain}")
-    def enrich_research_run(run_id: str, domain: str, payload: DomainEnrichmentCreate) -> dict[str, Any]:
+    @app.post("/v1/research-runs/{run_id}/enrich/{domain}", dependencies=[Depends(require_csrf)])
+    def enrich_research_run(
+        run_id: str,
+        domain: str,
+        payload: DomainEnrichmentCreate,
+        user: dict[str, Any] = Depends(get_current_user),
+    ) -> dict[str, Any]:
         handler_name = ENRICHMENT_HANDLERS.get(domain)
         if handler_name is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"unknown enrichment domain: {domain}")
         try:
-            research_service.store.get_run(run_id)
+            existing_run = research_service.store.get_run(run_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+        _check_run_ownership(existing_run, user)
         handler = getattr(research_service, handler_name)
         try:
             if domain == "trade":
@@ -568,11 +611,12 @@ def create_app(
         return _envelope(run)
 
     @app.get("/v1/research-runs/{run_id}/report")
-    async def get_research_report(run_id: str) -> dict[str, Any]:
+    async def get_research_report(run_id: str, user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
         try:
-            research_service.store.get_run(run_id)
+            existing_run = research_service.store.get_run(run_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+        _check_run_ownership(existing_run, user)
         run = research_service.store.get_run_detail(run_id)
         scores = scoring_svc.calculate_scores(run_id)
         domain_scores = scoring_svc.build_domain_scores(run_id)
@@ -584,11 +628,12 @@ def create_app(
         }
 
     @app.get("/v1/research-runs/{run_id}/report.pdf")
-    async def get_research_report_pdf(run_id: str) -> Response:
+    async def get_research_report_pdf(run_id: str, user: dict[str, Any] = Depends(get_current_user)) -> Response:
         try:
-            research_service.store.get_run(run_id)
+            existing_run = research_service.store.get_run(run_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+        _check_run_ownership(existing_run, user)
         run = research_service.store.get_run_detail(run_id)
         scores = scoring_svc.calculate_scores(run_id)
         domain_scores = scoring_svc.build_domain_scores(run_id)
@@ -611,12 +656,17 @@ def create_app(
             }
         return {"data": _agents_status()}
 
-    @app.post("/v1/research-runs/{run_id}/ficha")
-    async def generate_opportunity_ficha(run_id: str, payload: FichaCreate) -> dict[str, Any]:
+    @app.post("/v1/research-runs/{run_id}/ficha", dependencies=[Depends(require_csrf)])
+    async def generate_opportunity_ficha(
+        run_id: str,
+        payload: FichaCreate,
+        user: dict[str, Any] = Depends(get_current_user),
+    ) -> dict[str, Any]:
         try:
             run_row = research_service.store.get_run(run_id)
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+        _check_run_ownership(run_row, user)
 
         try:
             from pit_agents.product_intelligence.ficha_service import (
@@ -669,7 +719,7 @@ def create_app(
             },
         }
 
-    @app.get("/v1/connectors/status")
+    @app.get("/v1/connectors/status", dependencies=[Depends(require_admin)])
     async def connectors_status() -> dict[str, Any]:
         stats_rows = research_service.store.get_connector_stats()
         freshness_rows = research_service.store.get_freshness()
@@ -680,7 +730,7 @@ def create_app(
         metrics = {row["source"]: {"requests": row["total_requests"], "errors": row["failed"]} for row in stats_rows}
         return {"stats": stats, "freshness": freshness, "quota": quota, "metrics": metrics}
 
-    @app.get("/metrics")
+    @app.get("/metrics", dependencies=[Depends(require_admin)])
     async def metrics() -> dict[str, Any]:
         return _metrics.to_dict()
 

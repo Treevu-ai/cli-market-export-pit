@@ -91,10 +91,12 @@ class ResearchStore:
 
     def _execute(self, connection: Any, query: str, params: tuple[Any, ...] = ()) -> Any:
         placeholder = self._placeholder()
+        # _ph() is this file's backend-agnostic placeholder token; always
+        # resolve it first, then convert any bare "?" placeholders too (the
+        # older, still-common style used everywhere else in this file).
+        query = query.replace("_ph()", placeholder)
         if placeholder == "%s":
             query = query.replace("?", "%s")
-        else:
-            query = query.replace("_ph()", "?")
         cursor = connection.cursor()
         cursor.execute(query, params)
         return cursor
@@ -122,7 +124,7 @@ class ResearchStore:
         with self._transaction() as db:
             if self._backend == "postgresql":
                 statements = [
-                    "CREATE TABLE IF NOT EXISTS research_runs (id TEXT PRIMARY KEY, query_original TEXT NOT NULL, query_normalized TEXT NOT NULL, taxonomy_version TEXT NOT NULL, target_market TEXT NOT NULL, application TEXT NOT NULL, from_publication_date TEXT NOT NULL DEFAULT '2021-01-01', cutoff_at TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, completed_at TEXT, error TEXT)",
+                    "CREATE TABLE IF NOT EXISTS research_runs (id TEXT PRIMARY KEY, user_id TEXT, query_original TEXT NOT NULL, query_normalized TEXT NOT NULL, taxonomy_version TEXT NOT NULL, target_market TEXT NOT NULL, application TEXT NOT NULL, from_publication_date TEXT NOT NULL DEFAULT '2021-01-01', cutoff_at TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, completed_at TEXT, error TEXT)",
                     "CREATE TABLE IF NOT EXISTS source_requests (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, source TEXT NOT NULL, request_url TEXT NOT NULL, request_params TEXT NOT NULL, fetched_at TEXT, http_status INTEGER, checksum TEXT, raw_object_key TEXT, license TEXT NOT NULL, status TEXT NOT NULL, error TEXT)",
                     "CREATE TABLE IF NOT EXISTS evidence_records (id TEXT PRIMARY KEY, research_run_id TEXT NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE, source_request_id TEXT NOT NULL REFERENCES source_requests(id) ON DELETE RESTRICT, source TEXT NOT NULL, domain TEXT NOT NULL, external_id TEXT NOT NULL, title TEXT NOT NULL, published_at TEXT, geography TEXT, normalized_payload TEXT NOT NULL, dedupe_key TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(research_run_id, source, dedupe_key))",
                     "CREATE TABLE IF NOT EXISTS evidence_source_links (id TEXT PRIMARY KEY, evidence_record_id TEXT NOT NULL REFERENCES evidence_records(id) ON DELETE CASCADE, source_request_id TEXT NOT NULL REFERENCES source_requests(id) ON DELETE RESTRICT, source TEXT NOT NULL, external_id TEXT NOT NULL, normalized_payload TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(source_request_id, external_id))",
@@ -146,6 +148,7 @@ class ResearchStore:
                 for stmt in statements:
                     self._execute(db, stmt)
                 self._execute(db, "ALTER TABLE research_runs ADD COLUMN IF NOT EXISTS from_publication_date TEXT NOT NULL DEFAULT '2021-01-01'")
+                self._execute(db, "ALTER TABLE research_runs ADD COLUMN IF NOT EXISTS user_id TEXT")
                 self._execute(db, "INSERT INTO evidence_source_links (id, evidence_record_id, source_request_id, source, external_id, normalized_payload, created_at) SELECT 'legacy_' || id, id, source_request_id, source, external_id, normalized_payload, created_at FROM evidence_records ON CONFLICT DO NOTHING")
                 self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE")
                 self._execute(db, "ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token TEXT")
@@ -163,6 +166,7 @@ class ResearchStore:
                     """
                     CREATE TABLE IF NOT EXISTS research_runs (
                         id TEXT PRIMARY KEY,
+                        user_id TEXT,
                         query_original TEXT NOT NULL,
                         query_normalized TEXT NOT NULL,
                         taxonomy_version TEXT NOT NULL,
@@ -354,6 +358,10 @@ class ResearchStore:
                     db.execute("ALTER TABLE research_runs ADD COLUMN from_publication_date TEXT NOT NULL DEFAULT '2021-01-01'")
                 except sqlite3.OperationalError:
                     pass
+                try:
+                    db.execute("ALTER TABLE research_runs ADD COLUMN user_id TEXT")
+                except sqlite3.OperationalError:
+                    pass
                 for stmt in (
                     "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
                     "ALTER TABLE users ADD COLUMN verification_token TEXT",
@@ -384,6 +392,7 @@ class ResearchStore:
     def create_run(
         self,
         *,
+        user_id: str,
         query_original: str,
         query_normalized: str,
         target_market: str,
@@ -398,12 +407,13 @@ class ResearchStore:
             self._execute(db,
                 """
                 INSERT INTO research_runs (
-                    id, query_original, query_normalized, taxonomy_version, target_market,
+                    id, user_id, query_original, query_normalized, taxonomy_version, target_market,
                     application, from_publication_date, cutoff_at, status, created_at
-                ) VALUES (_ph(), _ph(), _ph(), _ph(), _ph(), _ph(), _ph(), _ph(), 'running', _ph())
+                ) VALUES (_ph(), _ph(), _ph(), _ph(), _ph(), _ph(), _ph(), _ph(), _ph(), 'running', _ph())
                 """,
                 (
                     run_id,
+                    user_id,
                     query_original,
                     query_normalized,
                     taxonomy_version,

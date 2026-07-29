@@ -42,6 +42,15 @@ export class EmailNotVerifiedError extends Error {
   }
 }
 
+// Double-submit CSRF cookie set by the backend on signup/login alongside
+// pit_session — deliberately readable by JS (not httpOnly) so it can be
+// echoed back as a header the backend compares against the cookie value.
+function getCsrfCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)pit_csrf=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export async function pitRequest<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -50,6 +59,10 @@ export async function pitRequest<T = unknown>(path: string, options: RequestInit
   };
   if (typeof window !== "undefined" && window.PIT_API_KEY) {
     headers["X-API-Key"] = window.PIT_API_KEY;
+  }
+  const csrfToken = getCsrfCookie();
+  if (csrfToken) {
+    headers["X-CSRF-Token"] = csrfToken;
   }
   const response = await fetch(`${getApiBase()}${path}`, { ...options, headers, credentials: "include" });
   const payload = await response.json().catch(() => ({}));

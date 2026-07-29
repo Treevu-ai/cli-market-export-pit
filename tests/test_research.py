@@ -9,6 +9,7 @@ from unittest import mock
 
 from fastapi.testclient import TestClient
 
+from pit import auth
 from pit.api import create_app
 from pit.bcrp import BCRPResponse
 from pit.climarket import CLIMarketResponse
@@ -34,6 +35,10 @@ from pit.research import (
 from pit.scoring import ScoringService
 from pit.semanticscholar import SemanticScholarRequestError, SemanticScholarResponse
 from pit.storage import ResearchStore
+
+
+def _decode_user_id(token: str) -> str:
+    return auth.decode_access_token(token)["sub"]
 
 
 class SuccessfulConnector:
@@ -621,6 +626,7 @@ class ResearchServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             _store, service = self._service(directory, SuccessfulConnector())
             result = service.run_science_research(
+                user_id="test-user",
                 query=" High-Flavanol   Cocoa Powder ",
                 target_market="US",
                 application="functional foods and beverages",
@@ -644,6 +650,7 @@ class ResearchServiceTests(unittest.TestCase):
 
             with self.assertRaises(ResearchExecutionError) as raised:
                 service.run_science_research(
+                    user_id="test-user",
                     query="cocoa powder",
                     target_market="US",
                     application="functional foods and beverages",
@@ -679,9 +686,64 @@ class ResearchServiceTests(unittest.TestCase):
             self.assertEqual(body["meta"]["evidence_count"], 1)
             self.assertIn("timestamp", body["trace"])
 
-            fetched = client.get(f"/v1/research-runs/{body['data']['id']}")
+            fetched = client.get(
+                f"/v1/research-runs/{body['data']['id']}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
             self.assertEqual(fetched.status_code, 200)
             self.assertEqual(fetched.json()["data"]["sources"][0]["source"], "openalex")
+
+    def test_run_endpoints_reject_a_non_owner_with_404_but_allow_the_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, service = self._service(directory, SuccessfulConnector())
+            client = TestClient(create_app(service))
+            owner_token = self._signup_and_login(client, email="owner@example.com")
+
+            created = client.post(
+                "/v1/research-runs",
+                json={"query": "high-flavanol cocoa powder", "limit": 10},
+                headers={"Authorization": f"Bearer {owner_token}"},
+            )
+            self.assertEqual(created.status_code, 201)
+            run_id = created.json()["data"]["id"]
+
+            other_signup = client.post(
+                "/v1/auth/signup", json={"email": "other@example.com", "password": "Testpass123!"}
+            )
+            other_token = other_signup.json()["data"]["token"]
+            _, kwargs = self.mock_send_verification_email.call_args
+            client.get(f"/v1/auth/verify?token={kwargs['token']}")
+
+            other_headers = {"Authorization": f"Bearer {other_token}"}
+            self.assertEqual(client.get(f"/v1/research-runs/{run_id}", headers=other_headers).status_code, 404)
+            self.assertEqual(client.get(f"/v1/research-runs/{run_id}/report", headers=other_headers).status_code, 404)
+            self.assertEqual(
+                client.get(f"/v1/research-runs/{run_id}/report.pdf", headers=other_headers).status_code, 404
+            )
+            self.assertEqual(
+                client.post(
+                    f"/v1/research-runs/{run_id}/enrich/crossref", json={"limit": 10}, headers=other_headers
+                ).status_code,
+                404,
+            )
+            self.assertEqual(
+                client.post(
+                    f"/v1/research-runs/{run_id}/ficha",
+                    json={"segment": "retail", "stage": "concepto"},
+                    headers=other_headers,
+                ).status_code,
+                404,
+            )
+
+            owner_headers = {"Authorization": f"Bearer {owner_token}"}
+            self.assertEqual(client.get(f"/v1/research-runs/{run_id}", headers=owner_headers).status_code, 200)
+            self.assertEqual(client.get(f"/v1/research-runs/{run_id}/report", headers=owner_headers).status_code, 200)
+            self.assertEqual(
+                client.get(f"/v1/research-runs/{run_id}/report.pdf", headers=owner_headers).status_code, 200
+            )
+
+            unauthenticated = client.get(f"/v1/research-runs/{run_id}")
+            self.assertEqual(unauthenticated.status_code, 401)
 
     def test_crossref_enrichment_links_matching_doi_without_duplicate_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -691,6 +753,7 @@ class ResearchServiceTests(unittest.TestCase):
                 SuccessfulCrossrefConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="high-flavanol cocoa powder",
                 target_market="US",
                 application="functional foods and beverages",
@@ -725,6 +788,7 @@ class ResearchServiceTests(unittest.TestCase):
                 pubmed_connector=SuccessfulPubMedConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="high-flavanol cocoa powder",
                 target_market="US",
                 application="functional foods and beverages",
@@ -747,6 +811,7 @@ class ResearchServiceTests(unittest.TestCase):
                 semanticscholar_connector=SuccessfulSemanticScholarConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="high-flavanol cocoa powder",
                 target_market="US",
                 application="functional foods and beverages",
@@ -763,6 +828,7 @@ class ResearchServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             _store, service = self._service(directory, SuccessfulConnector())
             service.run_science_research(
+                user_id="test-user",
                 query="high-flavanol cocoa powder",
                 target_market="US",
                 application="functional foods and beverages",
@@ -773,6 +839,7 @@ class ResearchServiceTests(unittest.TestCase):
             raw_files = list((Path(directory) / "raw").glob("*.json"))
             initial_count = len(raw_files)
             service.run_science_research(
+                user_id="test-user",
                 query="high-flavanol cocoa powder",
                 target_market="US",
                 application="functional foods and beverages",
@@ -787,6 +854,7 @@ class ResearchServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             _store, service = self._service(directory, SuccessfulConnector())
             result = service.run_science_research(
+                user_id="test-user",
                 query="high-flavanol cocoa powder",
                 target_market="US",
                 application="functional foods and beverages",
@@ -814,6 +882,7 @@ class ResearchServiceTests(unittest.TestCase):
                 patent_connector=SuccessfulPatentConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -839,6 +908,7 @@ class ResearchServiceTests(unittest.TestCase):
                 trend_connector=SuccessfulTrendConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -863,6 +933,7 @@ class ResearchServiceTests(unittest.TestCase):
                 trade_connector=SuccessfulTradeConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -888,6 +959,7 @@ class ResearchServiceTests(unittest.TestCase):
                 trade_connector=SuccessfulTradeConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -914,7 +986,12 @@ class ResearchServiceTests(unittest.TestCase):
                 trend_connector=SuccessfulTrendConnector(),
                 trade_connector=SuccessfulTradeConnector(),
             )
+            scoring = ScoringService(store)
+            client = TestClient(create_app(service, scoring, ReportGenerator()))
+            token = self._signup_and_login(client)
+            owner = store.get_user_by_email("user@example.com")
             initial = service.run_science_research(
+                user_id=owner["id"],
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -922,10 +999,11 @@ class ResearchServiceTests(unittest.TestCase):
                 from_publication_date="2021-01-01",
                 limit=10,
             )
-            scoring = ScoringService(store)
             scoring.calculate_scores(initial["id"])
-            client = TestClient(create_app(service, scoring, ReportGenerator()))
-            report = client.get(f"/v1/research-runs/{initial['id']}/report")
+            report = client.get(
+                f"/v1/research-runs/{initial['id']}/report",
+                headers={"Authorization": f"Bearer {token}"},
+            )
             self.assertEqual(report.status_code, 200)
             body = report.json()
             self.assertIn("run_id", body["data"])
@@ -934,6 +1012,7 @@ class ResearchServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             _, service = self._service(directory, SuccessfulConnector())
             service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -942,7 +1021,9 @@ class ResearchServiceTests(unittest.TestCase):
                 limit=10,
             )
             client = TestClient(create_app(service))
-            response = client.get("/v1/connectors/status")
+            os.environ["PIT_ADMIN_SECRET"] = "test-admin-secret"
+            self.addCleanup(lambda: os.environ.pop("PIT_ADMIN_SECRET", None))
+            response = client.get("/v1/connectors/status", headers={"X-Admin-Secret": "test-admin-secret"})
             self.assertEqual(response.status_code, 200)
             body = response.json()
             self.assertIn("stats", body)
@@ -960,6 +1041,7 @@ class ResearchServiceTests(unittest.TestCase):
                 nsf_connector=SuccessfulNSFConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -989,6 +1071,7 @@ class ResearchServiceTests(unittest.TestCase):
                 nsf_connector=SuccessfulNSFConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -1022,6 +1105,7 @@ class ResearchServiceTests(unittest.TestCase):
                 fooddata_connector=SuccessfulFoodDataCentralConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -1051,6 +1135,7 @@ class ResearchServiceTests(unittest.TestCase):
                 fooddata_connector=SuccessfulFoodDataCentralConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -1082,6 +1167,7 @@ class ResearchServiceTests(unittest.TestCase):
                 climatiq_connector=SuccessfulClimatiqConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="cocoa",
                 target_market="US",
                 application="functional foods and beverages",
@@ -1106,6 +1192,7 @@ class ResearchServiceTests(unittest.TestCase):
                 commerce_connector=SuccessfulCLIMarketConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="organic blueberry",
                 target_market="US",
                 application="fresh fruit export",
@@ -1128,6 +1215,7 @@ class ResearchServiceTests(unittest.TestCase):
                 commerce_connector=CLIMarketConnectorWithFailedIntelBrief(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="organic blueberry",
                 target_market="US",
                 application="fresh fruit export",
@@ -1157,6 +1245,7 @@ class ResearchServiceTests(unittest.TestCase):
                 bcrp_connector=SuccessfulBCRPConnector(),
             )
             initial = service.run_science_research(
+                user_id="test-user",
                 query="organic blueberry",
                 target_market="US",
                 application="fresh fruit export",
@@ -1177,6 +1266,7 @@ class ResearchServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             _, service = self._service(directory, SuccessfulConnector())
             result = service.run_full_pipeline(
+                user_id="test-user",
                 query="organic blueberry",
                 target_market="US",
                 application="fresh fruit export",
@@ -1211,6 +1301,7 @@ class ResearchServiceTests(unittest.TestCase):
                 semanticscholar_connector=FailingSemanticScholarConnector(),
             )
             run = service.run_full_pipeline(
+                user_id="test-user",
                 query="high-flavanol cocoa powder",
                 target_market="US",
                 application="functional foods and beverages",
@@ -1230,7 +1321,11 @@ class ResearchServiceTests(unittest.TestCase):
                 SuccessfulConnector(),
                 crossref_connector=SuccessfulCrossrefConnector(),
             )
+            client = TestClient(create_app(service))
+            token = self._signup_and_login(client)
+            owner = _decode_user_id(token)
             initial = service.run_science_research(
+                user_id=owner,
                 query="high-flavanol cocoa powder",
                 target_market="US",
                 application="functional foods and beverages",
@@ -1238,10 +1333,10 @@ class ResearchServiceTests(unittest.TestCase):
                 from_publication_date="2021-01-01",
                 limit=10,
             )
-            client = TestClient(create_app(service))
             response = client.post(
                 f"/v1/research-runs/{initial['id']}/enrich/crossref",
                 json={"limit": 10},
+                headers={"Authorization": f"Bearer {token}"},
             )
             self.assertEqual(response.status_code, 200)
             self.assertEqual(len(response.json()["data"]["sources"]), 2)

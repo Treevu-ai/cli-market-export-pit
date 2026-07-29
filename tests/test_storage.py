@@ -22,6 +22,7 @@ class StorageSecretRedactionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = self._store(directory)
             run = store.create_run(
+                user_id="test-user",
                 query_original="cocoa",
                 query_normalized="cocoa",
                 target_market="US",
@@ -48,6 +49,7 @@ class StorageSecretRedactionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = self._store(directory)
             run = store.create_run(
+                user_id="test-user",
                 query_original="cocoa",
                 query_normalized="cocoa",
                 target_market="US",
@@ -89,6 +91,7 @@ class StorageCountEvidenceBySourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = self._store(directory)
             run = store.create_run(
+                user_id="test-user",
                 query_original="cocoa",
                 query_normalized="cocoa",
                 target_market="US",
@@ -136,6 +139,7 @@ class StorageCountEvidenceBySourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = self._store(directory)
             run = store.create_run(
+                user_id="test-user",
                 query_original="cocoa",
                 query_normalized="cocoa",
                 target_market="US",
@@ -176,6 +180,7 @@ class StorageCountEvidenceBySourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = self._store(directory)
             run = store.create_run(
+                user_id="test-user",
                 query_original="cocoa",
                 query_normalized="cocoa",
                 target_market="US",

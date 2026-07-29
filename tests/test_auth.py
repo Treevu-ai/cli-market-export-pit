@@ -134,6 +134,55 @@ class AuthTests(unittest.TestCase):
             response = client.post("/v1/auth/login", json={"email": "nobody@b.com", "password": "Testpass123!"})
             self.assertEqual(response.status_code, 401)
 
+    def test_login_sets_a_csrf_cookie_and_cookie_authenticated_requests_require_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            service = ResearchService(store, SuccessfulConnector())
+            # Secure cookies are only ever sent by the test transport over
+            # https — matches real production, where both apps run behind
+            # Fly.io's forced HTTPS.
+            client = TestClient(create_app(service), base_url="https://testserver")
+            client.post("/v1/auth/signup", json={"email": "csrf@b.com", "password": "Testpass123!"})
+            login = client.post("/v1/auth/login", json={"email": "csrf@b.com", "password": "Testpass123!"})
+            self.assertEqual(login.status_code, 200)
+            self.assertIn("pit_csrf", client.cookies)
+
+            # Cookie-authenticated (no Authorization header) POST with no CSRF header is rejected.
+            missing_header = client.post("/v1/auth/logout")
+            self.assertEqual(missing_header.status_code, 403)
+
+            # Wrong token is rejected too.
+            wrong_header = client.post("/v1/auth/logout", headers={"X-CSRF-Token": "not-the-real-token"})
+            self.assertEqual(wrong_header.status_code, 403)
+
+            # The real double-submit token succeeds.
+            csrf_token = client.cookies["pit_csrf"]
+            ok = client.post("/v1/auth/logout", headers={"X-CSRF-Token": csrf_token})
+            self.assertEqual(ok.status_code, 200)
+
+    def test_cookie_authenticated_research_run_creation_requires_csrf_header(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            service = ResearchService(store, SuccessfulConnector())
+            client = TestClient(create_app(service), base_url="https://testserver")
+            client.post("/v1/auth/signup", json={"email": "csrf-run@b.com", "password": "Testpass123!"})
+            token = self._last_verification_token()
+            client.get(f"/v1/auth/verify?token={token}")
+            login = client.post("/v1/auth/login", json={"email": "csrf-run@b.com", "password": "Testpass123!"})
+            self.assertEqual(login.status_code, 200)
+
+            # Cookie-authenticated (no Authorization header, relying purely on
+            # the ambient pit_session cookie) with no CSRF header is rejected —
+            # this is the actual attack this dependency defends against.
+            no_csrf = client.post("/v1/research-runs", json={"query": "cocoa", "limit": 5})
+            self.assertEqual(no_csrf.status_code, 403)
+
+            csrf_token = client.cookies["pit_csrf"]
+            with_csrf = client.post(
+                "/v1/research-runs", json={"query": "cocoa", "limit": 5}, headers={"X-CSRF-Token": csrf_token}
+            )
+            self.assertEqual(with_csrf.status_code, 201)
+
     def test_me_requires_valid_token(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)

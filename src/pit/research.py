@@ -125,6 +125,7 @@ class ResearchService:
     def run_science_research(
         self,
         *,
+        user_id: str,
         query: str,
         target_market: str,
         application: str,
@@ -136,6 +137,7 @@ class ResearchService:
             raise RuntimeError("Science connector is not configured")
         ensure_default_taxonomy(self.store)
         run = self.store.create_run(
+            user_id=user_id,
             query_original=query,
             query_normalized=normalize_query(query),
             target_market=target_market,
@@ -1074,6 +1076,7 @@ class ResearchService:
     def run_full_pipeline(
         self,
         *,
+        user_id: str,
         query: str,
         target_market: str,
         application: str,
@@ -1083,6 +1086,7 @@ class ResearchService:
         hs_code: str | None = None,
     ) -> dict[str, Any]:
         run = self.run_science_research(
+            user_id=user_id,
             query=query,
             target_market=target_market,
             application=application,
