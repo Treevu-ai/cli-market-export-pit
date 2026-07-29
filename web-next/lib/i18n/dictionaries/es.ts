@@ -161,6 +161,36 @@ export const es = {
       Higo: "Higo",
       Maracuyá: "Maracuyá",
     },
+    families: {
+      frutasFrescas: {
+        name: "Frutas frescas",
+        description: "Fruta de exportación en fresco, con código arancelario propio.",
+      },
+      derivadosFuncionales: {
+        name: "Derivados y funcionales",
+        description: "Pulpas, cacao y formulaciones con reclamo funcional.",
+      },
+      especiasAromaticas: {
+        name: "Especias y aromáticas",
+        description: "Ajíes, páprika y cúrcuma con evidencia arancelaria específica.",
+      },
+      granosSemillas: {
+        name: "Granos y semillas",
+        description: "Quinua, kiwicha y chía, base de la oferta andina.",
+      },
+      vegetalesRaices: {
+        name: "Vegetales y raíces",
+        description: "Alcachofa, espárrago y maca en fresco o procesados.",
+      },
+      bebidasEstimulantes: {
+        name: "Bebidas y estimulantes",
+        description: "Café y pisco, íconos de exportación con marca país.",
+      },
+    },
+    hsQuality: {
+      exclusive: "HS específico",
+      basket: "HS compartido",
+    },
     statCategoriesLabel: "Categorías con caso real",
     statMarketLabel: "Cualquier mercado destino",
     statQueryLabel: "Consulta libre",

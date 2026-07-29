@@ -161,6 +161,36 @@ export const en = {
       Higo: "Fig",
       Maracuyá: "Passion fruit",
     },
+    families: {
+      frutasFrescas: {
+        name: "Fresh fruit",
+        description: "Fresh export fruit, each with its own tariff code.",
+      },
+      derivadosFuncionales: {
+        name: "Derivatives & functional",
+        description: "Pulps, cacao, and formulations with a functional claim.",
+      },
+      especiasAromaticas: {
+        name: "Spices & aromatics",
+        description: "Chili peppers, paprika, and turmeric with specific trade evidence.",
+      },
+      granosSemillas: {
+        name: "Grains & seeds",
+        description: "Quinoa, amaranth, and chia — the base of the Andean offer.",
+      },
+      vegetalesRaices: {
+        name: "Vegetables & roots",
+        description: "Artichoke, asparagus, and maca, fresh or processed.",
+      },
+      bebidasEstimulantes: {
+        name: "Beverages & stimulants",
+        description: "Coffee and pisco, flagship exports with a country brand.",
+      },
+    },
+    hsQuality: {
+      exclusive: "Specific HS",
+      basket: "Shared HS",
+    },
     statCategoriesLabel: "Categories with a real case",
     statMarketLabel: "Any target market",
     statQueryLabel: "Free-form query",
