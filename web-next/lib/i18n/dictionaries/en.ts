@@ -153,6 +153,8 @@ export const en = {
       Alcachofa: "Artichoke",
       "Ají panca": "Dried ají panca",
       Espárrago: "Asparagus",
+      Banano: "Organic banana",
+      Limón: "Lime",
     },
     statCategoriesLabel: "Categories with a real case",
     statMarketLabel: "Any target market",

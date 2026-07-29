@@ -22,6 +22,8 @@ const integrations = [
   { name: "Alcachofa", category: "PE→US", query: "alcachofa en conserva", market: "US", Icon: Flower2 },
   { name: "Ají panca", category: "PE→US", query: "ají panca deshidratado", market: "US", Icon: Flame },
   { name: "Espárrago", category: "PE→US", query: "espárrago fresco", market: "US", Icon: Sprout },
+  { name: "Banano", category: "PE→EU", query: "banano orgánico", market: "EU", Icon: Leaf },
+  { name: "Limón", category: "PE→US", query: "limón sutil", market: "US", Icon: Citrus },
 ];
 
 export function IntegrationsSection() {

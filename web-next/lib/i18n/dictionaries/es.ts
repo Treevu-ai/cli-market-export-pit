@@ -153,6 +153,8 @@ export const es = {
       Alcachofa: "Alcachofa",
       "Ají panca": "Ají panca",
       Espárrago: "Espárrago",
+      Banano: "Banano",
+      Limón: "Limón",
     },
     statCategoriesLabel: "Categorías con caso real",
     statMarketLabel: "Cualquier mercado destino",

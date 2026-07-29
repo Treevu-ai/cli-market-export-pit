@@ -66,6 +66,17 @@ _SEED_SYNONYMS: list[tuple[str, str]] = [
     ("ají panca", "chili_pepper"),
     ("chili pepper", "chili_pepper"),
     ("dried chili", "chili_pepper"),
+    ("banano", "banana"),
+    ("banano organico", "banana"),
+    ("platano", "banana"),
+    ("banana", "banana"),
+    ("bananas", "banana"),
+    ("limon", "lime"),
+    ("limón", "lime"),
+    ("limon sutil", "lime"),
+    ("lime", "lime"),
+    ("limes", "lime"),
+    ("lemon", "lime"),
 ]
 
 _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
@@ -86,6 +97,8 @@ _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
     ("camu_camu", "081190", "Camu camu pulp, frozen"),
     ("artichoke", "070991", "Fresh or chilled globe artichokes"),
     ("chili_pepper", "090421", "Dried chili peppers (ají panca), neither crushed nor ground"),
+    ("banana", "080390", "Fresh bananas, other than plantains"),
+    ("lime", "080550", "Fresh or dried lemons and limes"),
 ]
 
 
