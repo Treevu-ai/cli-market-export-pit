@@ -43,9 +43,11 @@ class FoodDataCentralApiKeyLeakTests(unittest.TestCase):
             fp=None,
         )
         http_error.read = lambda: b'{"error":"invalid api key"}'
-        with patch("pit.fooddata_central.urlopen", side_effect=http_error):
-            with self.assertRaises(FoodDataCentralRequestError) as raised:
-                connector.search(query="cocoa", from_publication_date="2021-01-01", limit=10)
+        with (
+            patch("pit.fooddata_central.urlopen", side_effect=http_error),
+            self.assertRaises(FoodDataCentralRequestError) as raised,
+        ):
+            connector.search(query="cocoa", from_publication_date="2021-01-01", limit=10)
 
         error = raised.exception
         self.assertNotIn("super-secret-key", error.request_url or "")

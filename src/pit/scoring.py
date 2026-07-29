@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from .storage import ResearchStore
 
@@ -70,7 +70,7 @@ def estimate_score(domain: str, payloads: dict[str, Any]) -> int:
 
 class ScoringEngine:
     score_version = "v1.0-mvp"
-    weights = {
+    weights: ClassVar[dict[str, float]] = {
         "science": 0.25,
         "patent": 0.15,
         "trend": 0.15,

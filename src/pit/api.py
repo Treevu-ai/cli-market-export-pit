@@ -8,9 +8,10 @@ import logging
 import os
 import secrets
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
+
 
 def _load_env_file() -> None:
     try:
@@ -29,9 +30,9 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from . import auth
 from . import email as email_service
+from .bcrp import BCRPConnector
 from .climarket import CLIMarketConnector
 from .climatiq import ClimatiqConnector
-from .bcrp import BCRPConnector
 from .comtrade import ComtradeConnector
 from .cordis import CORDISConnector
 from .crossref import CrossrefConnector
@@ -167,7 +168,7 @@ _ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv("PIT_CORS_ORIGINS", "
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -252,7 +253,7 @@ def _envelope(data: dict[str, Any]) -> dict[str, Any]:
         },
         "trace": {
             "version": "0.1.0",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         },
     }
 
@@ -363,7 +364,7 @@ def create_app(
 
     def require_signup_rate_limit(request: Request) -> None:
         ip = _client_ip(request)
-        window_key = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        window_key = datetime.now(UTC).strftime("%Y-%m-%dT%H")
         try:
             new_count = research_service.store.get_and_increment_signup_attempts(
                 ip=ip, window_key=window_key, limit=SIGNUP_RATE_LIMIT_PER_IP
@@ -386,7 +387,7 @@ def create_app(
 
     def _new_verification_token() -> tuple[str, str]:
         token = auth.generate_verification_token()
-        expires_at = (datetime.now(timezone.utc) + auth.VERIFICATION_TOKEN_TTL).isoformat()
+        expires_at = (datetime.now(UTC) + auth.VERIFICATION_TOKEN_TTL).isoformat()
         return token, expires_at
 
     def _dispatch_verification_email(*, to: str, token: str, locale: str) -> None:
@@ -420,7 +421,7 @@ def create_app(
 
     @app.get("/v1/auth/verify")
     def verify_email(token: str) -> dict[str, Any]:
-        user = research_service.store.verify_email(token=token, now=datetime.now(timezone.utc).isoformat())
+        user = research_service.store.verify_email(token=token, now=datetime.now(UTC).isoformat())
         if user is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification link")
         return _envelope({"email": user["email"], "email_verified": True})
@@ -431,7 +432,7 @@ def create_app(
     def resend_verification(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
         if user["email_verified"]:
             return _envelope({"already_verified": True})
-        window_key = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        window_key = datetime.now(UTC).strftime("%Y-%m-%dT%H")
         new_count = research_service.store.get_and_increment_resend_attempts(
             user_id=user["id"], window_key=window_key, limit=RESEND_VERIFICATION_LIMIT_PER_HOUR
         )
@@ -447,7 +448,7 @@ def create_app(
 
     def require_login_rate_limit(request: Request) -> None:
         ip = _client_ip(request)
-        window_key = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        window_key = datetime.now(UTC).strftime("%Y-%m-%dT%H")
         try:
             new_count = research_service.store.get_and_increment_login_attempts(
                 ip=ip, window_key=window_key, limit=LOGIN_RATE_LIMIT_PER_IP
@@ -500,8 +501,10 @@ def create_app(
             expires_at = None
         else:
             duration_days = payload.expires_in_days or auth.DEFAULT_TIER_DURATION_DAYS.get(payload.tier, 30)
-            expires_at = (datetime.now(timezone.utc) + timedelta(days=duration_days)).isoformat()
+            expires_at = (datetime.now(UTC) + timedelta(days=duration_days)).isoformat()
         updated = research_service.store.set_user_tier(user["id"], payload.tier, expires_at=expires_at)
+        if updated is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="user not found")
         return _envelope({"email": updated["email"], "tier": updated["tier"], "tier_expires_at": updated["tier_expires_at"]})
 
     @app.post("/v1/research-runs", status_code=status.HTTP_201_CREATED)
@@ -511,7 +514,7 @@ def create_app(
                 query=payload.query,
                 target_market=payload.target_market,
                 application=payload.application,
-                cutoff_at=datetime.now(timezone.utc).isoformat(),
+                cutoff_at=datetime.now(UTC).isoformat(),
                 from_publication_date=payload.from_publication_date,
                 limit=payload.limit,
             )
@@ -526,7 +529,7 @@ def create_app(
                 query=payload.query,
                 target_market=payload.target_market,
                 application=payload.application,
-                cutoff_at=datetime.now(timezone.utc).isoformat(),
+                cutoff_at=datetime.now(UTC).isoformat(),
                 from_publication_date=payload.from_publication_date,
                 limit=payload.limit,
                 hs_code=payload.hs_code,
@@ -577,7 +580,7 @@ def create_app(
         return {
             "data": report,
             "meta": {"confidence": "ok", "evidence_count": len(run.get("evidence", []))},
-            "trace": {"version": "0.1.0", "timestamp": datetime.now(timezone.utc).isoformat()},
+            "trace": {"version": "0.1.0", "timestamp": datetime.now(UTC).isoformat()},
         }
 
     @app.get("/v1/research-runs/{run_id}/report.pdf")
@@ -595,7 +598,9 @@ def create_app(
     @app.get("/v1/agents/status")
     def get_agents_status() -> dict[str, Any]:
         try:
-            from pit_agents.product_intelligence.ficha_service import agents_status as _agents_status
+            from pit_agents.product_intelligence.ficha_service import (
+                agents_status as _agents_status,
+            )
         except ImportError:
             return {
                 "data": {
@@ -660,7 +665,7 @@ def create_app(
             },
             "trace": {
                 "version": "0.1.0",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         }
 

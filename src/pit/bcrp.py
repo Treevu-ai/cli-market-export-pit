@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, ClassVar
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -51,7 +51,7 @@ class BCRPConnector:
     # del periodo (S/ por US$)". Other series codes are not hardcoded here until
     # manually verified — BCRP returns a WAF/HTML page (not a clean error) for
     # unrecognized codes.
-    DEFAULT_SERIES = ["PN01207PM"]
+    DEFAULT_SERIES: ClassVar[list[str]] = ["PN01207PM"]
 
     def __init__(self, base_url: str | None = None) -> None:
         self.base_url = (base_url or os.getenv("BCRP_API_URL") or self.base_url).rstrip("/")
@@ -70,7 +70,7 @@ class BCRPConnector:
         language: str = "esp",
     ) -> BCRPResponse:
         codes = series_codes or self.DEFAULT_SERIES
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start_year, start_month = _shift_period(now, months_back)
         end_year, end_month = _shift_period(now, 0)
         start_period = f"{start_year}-{start_month}"

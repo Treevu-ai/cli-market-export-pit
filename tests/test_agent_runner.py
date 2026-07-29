@@ -73,16 +73,17 @@ class ContextAgentTests(unittest.TestCase):
             [_block("tool_use", id="tu_x", name="load_scientific_context", input={})],
         )
         fake_client.messages.create.return_value = never_ending_tool_use
-        with patch.object(runner, "_client", return_value=fake_client), patch.object(
-            runner, "MAX_TURNS", 2
+        with (
+            patch.object(runner, "_client", return_value=fake_client),
+            patch.object(runner, "MAX_TURNS", 2),
+            self.assertRaises(RuntimeError),
         ):
-            with self.assertRaises(RuntimeError):
-                runner._run_context_agent(
-                    instructions="SCI_SYSTEM",
-                    prompt="Evalúa la evidencia",
-                    tool_name="load_scientific_context",
-                    domain="scientific",
-                )
+            runner._run_context_agent(
+                instructions="SCI_SYSTEM",
+                prompt="Evalúa la evidencia",
+                tool_name="load_scientific_context",
+                domain="scientific",
+            )
 
 
 class OrchestratorTests(unittest.TestCase):
@@ -135,11 +136,15 @@ class OrchestratorTests(unittest.TestCase):
             "tool_use",
             [_block("tool_use", id="tu_x", name="build_product_brief", input={"task": "x"})],
         )
-        with patch.object(runner, "_client", return_value=fake_client), patch.dict(
-            runner._DELEGATE_HANDLERS, {"build_product_brief": MagicMock(return_value="brief")}
-        ), patch.object(runner, "MAX_TURNS", 2):
-            with self.assertRaises(RuntimeError):
-                runner._run_orchestrator("Analiza esta iniciativa")
+        with (
+            patch.object(runner, "_client", return_value=fake_client),
+            patch.dict(
+                runner._DELEGATE_HANDLERS, {"build_product_brief": MagicMock(return_value="brief")}
+            ),
+            patch.object(runner, "MAX_TURNS", 2),
+            self.assertRaises(RuntimeError),
+        ):
+            runner._run_orchestrator("Analiza esta iniciativa")
 
 
 if __name__ == "__main__":

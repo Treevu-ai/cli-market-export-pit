@@ -9,7 +9,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-
 ISO_TO_COMTRADE: dict[str, str] = {
     "US": "842",
     "DE": "276",

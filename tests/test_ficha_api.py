@@ -6,13 +6,13 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
+from test_research import SuccessfulConnector
 
 from pit.api import create_app
 from pit.reports import ReportGenerator
 from pit.research import ResearchService
 from pit.scoring import ScoringService
 from pit.storage import ResearchStore
-from test_research import SuccessfulConnector
 
 
 class FichaApiTests(unittest.TestCase):

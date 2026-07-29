@@ -67,9 +67,11 @@ class BCRPConnectorTests(unittest.TestCase):
             fp=None,
         )
         http_error.read = lambda: b"not found"
-        with patch("pit.bcrp.urlopen", side_effect=http_error):
-            with self.assertRaises(BCRPRequestError) as raised:
-                connector.search(months_back=1)
+        with (
+            patch("pit.bcrp.urlopen", side_effect=http_error),
+            self.assertRaises(BCRPRequestError) as raised,
+        ):
+            connector.search(months_back=1)
 
         self.assertEqual(raised.exception.http_status, 404)
 
@@ -78,9 +80,11 @@ class BCRPConnectorTests(unittest.TestCase):
         # unrecognized series codes.
         connector = BCRPConnector()
         html_body = b"<html><body>Incapsula challenge</body></html>"
-        with patch("pit.bcrp.urlopen", return_value=_fake_response(html_body)):
-            with self.assertRaises(BCRPRequestError):
-                connector.search(months_back=1)
+        with (
+            patch("pit.bcrp.urlopen", return_value=_fake_response(html_body)),
+            self.assertRaises(BCRPRequestError),
+        ):
+            connector.search(months_back=1)
 
 
 if __name__ == "__main__":

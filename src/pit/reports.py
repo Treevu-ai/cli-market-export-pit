@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from .improvement_checklist import build_improvement_checklist, pdf_safe_text
@@ -127,7 +127,7 @@ class ReportGenerator:
             new_x=XPos.LMARGIN,
             new_y=YPos.NEXT,
         )
-        generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        generated = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         pdf.cell(0, 5, pdf_safe_text(f"Generado: {generated}  |  Run: {run['id']}"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(3)
 

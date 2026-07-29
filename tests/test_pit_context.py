@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from pit_agents.product_intelligence.adapters.pit_context import (  # noqa: E402
+from pit_agents.product_intelligence.adapters.pit_context import (
     PITClient,
     build_context_bundle,
 )
