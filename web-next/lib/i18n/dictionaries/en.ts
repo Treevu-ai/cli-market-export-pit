@@ -155,6 +155,7 @@ export const en = {
       Espárrago: "Asparagus",
       Banano: "Organic banana",
       Limón: "Lime",
+      Páprika: "Paprika",
     },
     statCategoriesLabel: "Categories with a real case",
     statMarketLabel: "Any target market",

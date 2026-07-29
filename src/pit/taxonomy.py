@@ -77,6 +77,10 @@ _SEED_SYNONYMS: list[tuple[str, str]] = [
     ("lime", "lime"),
     ("limes", "lime"),
     ("lemon", "lime"),
+    ("paprika", "paprika"),
+    ("páprika", "paprika"),
+    ("paprika molida", "paprika"),
+    ("ground paprika", "paprika"),
 ]
 
 _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
@@ -99,6 +103,7 @@ _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
     ("chili_pepper", "090421", "Dried chili peppers (ají panca), neither crushed nor ground"),
     ("banana", "080390", "Fresh bananas, other than plantains"),
     ("lime", "080550", "Fresh or dried lemons and limes"),
+    ("paprika", "090422", "Paprika: fruits of the genus Capsicum, crushed or ground"),
 ]
 
 

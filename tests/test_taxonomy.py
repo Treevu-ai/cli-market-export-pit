@@ -152,6 +152,17 @@ class TaxonomyTests(unittest.TestCase):
             )
             self.assertEqual(hs, "080550")
 
+    def test_resolve_hs_code_for_paprika_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="paprika molida para exportacion",
+            )
+            self.assertEqual(hs, "090422")
+
 
 if __name__ == "__main__":
     unittest.main()
