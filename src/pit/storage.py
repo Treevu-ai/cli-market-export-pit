@@ -7,19 +7,20 @@ import json
 import os
 import re
 import sqlite3
+
 try:
-    import psycopg2  # noqa: F401
+    import psycopg2
 except ImportError:
     psycopg2 = None  # type: ignore[assignment]
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 _SENSITIVE_PARAM_KEYS = {

@@ -10,25 +10,28 @@ from unittest import mock
 from fastapi.testclient import TestClient
 
 from pit.api import create_app
+from pit.bcrp import BCRPResponse
+from pit.climarket import CLIMarketResponse
+from pit.climatiq import ClimatiqResponse
 from pit.comtrade import ComtradeResponse
 from pit.cordis import CORDISResponse
 from pit.crossref import CrossrefResponse
+from pit.efsa_eurlex import EFSALexResponse
 from pit.epo_ops import EPOOPSResponse
+from pit.fooddata_central import FoodDataCentralResponse
 from pit.gdelt import GDELTResponse
-from pit.nih_reporter import NIHReporterResponse
+from pit.nih_reporter import NIHReporterRequestError, NIHReporterResponse
 from pit.nsf_awards import NSFAwardsResponse
 from pit.openalex import OpenAlexRequestError, OpenAlexResponse
 from pit.openfda import OpenFDARequestError, OpenFDAResponse
-from pit.efsa_eurlex import EFSALexResponse
-from pit.fooddata_central import FoodDataCentralResponse
-from pit.nih_reporter import NIHReporterRequestError
-from pit.climatiq import ClimatiqResponse
-from pit.climarket import CLIMarketResponse
-from pit.bcrp import BCRPResponse
 from pit.pubmed import PubMedResponse
-from pit.research import ResearchExecutionError, ResearchService, _crossref_publication_date
-from pit.scoring import ScoringService
 from pit.reports import ReportGenerator
+from pit.research import (
+    ResearchExecutionError,
+    ResearchService,
+    _crossref_publication_date,
+)
+from pit.scoring import ScoringService
 from pit.semanticscholar import SemanticScholarRequestError, SemanticScholarResponse
 from pit.storage import ResearchStore
 
@@ -616,7 +619,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_persists_immutable_raw_response_and_normalized_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(directory, SuccessfulConnector())
+            _store, service = self._service(directory, SuccessfulConnector())
             result = service.run_science_research(
                 query=" High-Flavanol   Cocoa Powder ",
                 target_market="US",
@@ -715,7 +718,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_pubmed_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(
+            _store, service = self._service(
                 directory,
                 SuccessfulConnector(),
                 crossref_connector=SuccessfulCrossrefConnector(),
@@ -737,7 +740,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_semantic_scholar_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(
+            _store, service = self._service(
                 directory,
                 SuccessfulConnector(),
                 crossref_connector=SuccessfulCrossrefConnector(),
@@ -758,7 +761,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_cache_avoids_duplicate_raw_storage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(directory, SuccessfulConnector())
+            _store, service = self._service(directory, SuccessfulConnector())
             service.run_science_research(
                 query="high-flavanol cocoa powder",
                 target_market="US",
@@ -782,7 +785,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_domain_summaries_saved_with_top_entities(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(directory, SuccessfulConnector())
+            _store, service = self._service(directory, SuccessfulConnector())
             result = service.run_science_research(
                 query="high-flavanol cocoa powder",
                 target_market="US",
@@ -805,7 +808,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_patent_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(
+            _store, service = self._service(
                 directory,
                 SuccessfulConnector(),
                 patent_connector=SuccessfulPatentConnector(),
@@ -830,7 +833,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_trend_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(
+            _store, service = self._service(
                 directory,
                 SuccessfulConnector(),
                 trend_connector=SuccessfulTrendConnector(),
@@ -854,7 +857,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_trade_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(
+            _store, service = self._service(
                 directory,
                 SuccessfulConnector(),
                 trade_connector=SuccessfulTradeConnector(),
@@ -949,7 +952,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_techscout_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(
+            _store, service = self._service(
                 directory,
                 SuccessfulConnector(),
                 cordis_connector=SuccessfulCORDISConnector(),
@@ -1011,7 +1014,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_regulatory_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(
+            _store, service = self._service(
                 directory,
                 SuccessfulConnector(),
                 openfda_connector=SuccessfulOpenFDAConnector(),
@@ -1073,7 +1076,7 @@ class ResearchServiceTests(unittest.TestCase):
 
     def test_sustainability_enrichment_stores_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            store, service = self._service(
+            _store, service = self._service(
                 directory,
                 SuccessfulConnector(),
                 climatiq_connector=SuccessfulClimatiqConnector(),

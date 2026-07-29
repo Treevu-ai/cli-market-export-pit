@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import tempfile
 import unittest
-from pathlib import Path
 
 from pit.improvement_checklist import build_improvement_checklist, pdf_safe_text
 from pit.reports import ReportGenerator

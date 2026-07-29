@@ -8,24 +8,28 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib.parse import urlencode
 
-from .crossref import CrossrefConnector, CrossrefRequestError
-from .epo_ops import EPOOPSConnector, EPOOPSRequestError
-from .gdelt import GDELTConnector, GDELTRequestError
+from .bcrp import BCRPConnector, BCRPRequestError
+from .climarket import CLIMarketConnector, CLIMarketRequestError
+from .climatiq import ClimatiqConnector, ClimatiqRequestError
 from .comtrade import ComtradeConnector, ComtradeRequestError
+from .cordis import CORDISConnector, CORDISRequestError
+from .crossref import CrossrefConnector, CrossrefRequestError
+from .efsa_eurlex import EFSALexConnector, EFSALexRequestError
+from .epo_ops import EPOOPSConnector, EPOOPSRequestError
+from .fooddata_central import FoodDataCentralConnector, FoodDataCentralRequestError
+from .gdelt import GDELTConnector, GDELTRequestError
+from .nih_reporter import NIHReporterConnector, NIHReporterRequestError
+from .nsf_awards import NSFAwardsConnector, NSFAwardsRequestError
 from .openalex import OpenAlexRequestError, OpenAlexResponse
+from .openfda import OpenFDAConnector, OpenFDARequestError
 from .pubmed import PubMedConnector, PubMedRequestError
 from .semanticscholar import SemanticScholarConnector, SemanticScholarRequestError
 from .storage import ResearchStore
-from .cordis import CORDISConnector, CORDISRequestError
-from .nih_reporter import NIHReporterConnector, NIHReporterRequestError
-from .nsf_awards import NSFAwardsConnector, NSFAwardsRequestError
-from .openfda import OpenFDAConnector, OpenFDARequestError
-from .efsa_eurlex import EFSALexConnector, EFSALexRequestError
-from .fooddata_central import FoodDataCentralConnector, FoodDataCentralRequestError
-from .climatiq import ClimatiqConnector, ClimatiqRequestError
-from .climarket import CLIMarketConnector, CLIMarketRequestError
-from .bcrp import BCRPConnector, BCRPRequestError
-from .taxonomy import ensure_default_taxonomy, expand_query_with_synonyms, resolve_hs_code
+from .taxonomy import (
+    ensure_default_taxonomy,
+    expand_query_with_synonyms,
+    resolve_hs_code,
+)
 
 
 class ScienceConnector(Protocol):
@@ -57,8 +61,7 @@ def _run_context(run: dict[str, Any]) -> tuple[str, str, str]:
 def _dedupe_key(doi: str, fallback: str) -> str:
     normalized_doi = doi.strip().casefold()
     for prefix in ("https://doi.org/", "http://doi.org/", "doi:"):
-        if normalized_doi.startswith(prefix):
-            normalized_doi = normalized_doi[len(prefix):]
+        normalized_doi = normalized_doi.removeprefix(prefix)
     return normalized_doi or fallback.strip().casefold()
 
 
