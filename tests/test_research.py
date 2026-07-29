@@ -578,7 +578,7 @@ class ResearchServiceTests(unittest.TestCase):
         response = client.post("/v1/auth/signup", json={"email": email, "password": password})
         assert response.status_code == 201, response.text
         _, kwargs = self.mock_send_verification_email.call_args
-        client.get(f"/v1/auth/verify?token={kwargs['token']}")
+        client.post("/v1/auth/verify", json={"token": kwargs['token']})
         return response.json()["data"]["token"]
 
     def _service(
@@ -712,7 +712,7 @@ class ResearchServiceTests(unittest.TestCase):
             )
             other_token = other_signup.json()["data"]["token"]
             _, kwargs = self.mock_send_verification_email.call_args
-            client.get(f"/v1/auth/verify?token={kwargs['token']}")
+            client.post("/v1/auth/verify", json={"token": kwargs['token']})
 
             other_headers = {"Authorization": f"Bearer {other_token}"}
             self.assertEqual(client.get(f"/v1/research-runs/{run_id}", headers=other_headers).status_code, 404)

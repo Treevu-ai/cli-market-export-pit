@@ -45,6 +45,9 @@ services:
 
   db:
     image: postgres:16-alpine
+    # Local-dev-only credentials — this container is never exposed outside
+    # the compose network and production uses a managed Postgres instance
+    # via DATABASE_URL, not this service.
     environment:
       POSTGRES_USER: pit
       POSTGRES_PASSWORD: pit

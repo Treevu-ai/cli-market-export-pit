@@ -47,7 +47,7 @@ class UsageLimitTests(unittest.TestCase):
         client = TestClient(create_app(service))
         signup = client.post("/v1/auth/signup", json={"email": email, "password": "Testpass123!"})
         _, kwargs = self.mock_send_verification_email.call_args
-        client.get(f"/v1/auth/verify?token={kwargs['token']}")
+        client.post("/v1/auth/verify", json={"token": kwargs['token']})
         return client, signup.json()["data"]["token"]
 
     def _run(self, client: TestClient, token: str):
@@ -100,7 +100,7 @@ class UsageLimitTests(unittest.TestCase):
             signup_b = client.post("/v1/auth/signup", json={"email": "b@b.com", "password": "Testpass123!"})
             token_b = signup_b.json()["data"]["token"]
             _, kwargs_b = self.mock_send_verification_email.call_args
-            client.get(f"/v1/auth/verify?token={kwargs_b['token']}")
+            client.post("/v1/auth/verify", json={"token": kwargs_b['token']})
             for _ in range(5):
                 self.assertEqual(self._run(client, token_a).status_code, 201)
             self.assertEqual(self._run(client, token_a).status_code, 402)

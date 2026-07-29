@@ -277,9 +277,12 @@ export async function getMe(): Promise<MeResponse> {
 }
 
 export async function verifyEmail(token: string): Promise<{ email: string; email_verified: boolean }> {
-  const envelope = await pitRequest<{ data: { email: string; email_verified: boolean } }>(
-    `/v1/auth/verify?token=${encodeURIComponent(token)}`
-  );
+  // POST with the token in the body, not a query param — keeps it out of
+  // server access logs.
+  const envelope = await pitRequest<{ data: { email: string; email_verified: boolean } }>("/v1/auth/verify", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
   return envelope.data;
 }
 

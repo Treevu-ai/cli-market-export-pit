@@ -36,7 +36,7 @@ class FichaApiTests(unittest.TestCase):
             )
         token = signup.json()["data"]["token"]
         owner = store.get_user_by_email("ficha@example.com")
-        client.get(f"/v1/auth/verify?token={owner['verification_token']}")
+        client.post("/v1/auth/verify", json={"token": owner['verification_token']})
         run = service.run_science_research(
             user_id=owner["id"],
             query="mango organico",

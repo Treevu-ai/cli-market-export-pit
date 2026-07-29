@@ -124,6 +124,10 @@ class LoginCreate(BaseModel):
     password: Annotated[str, Field(min_length=8, max_length=200)]
 
 
+class VerifyEmailCreate(BaseModel):
+    token: str
+
+
 class SetTierCreate(BaseModel):
     email: EmailStr
     tier: Annotated[str, Field(pattern=r"^(free|pro|enterprise)$")]
@@ -270,6 +274,12 @@ def _check_run_ownership(run: dict[str, Any], user: dict[str, Any]) -> None:
     # but isn't yours" from "run doesn't exist" — that alone leaks information.
     if run.get("user_id") != user["id"]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+
+
+def _public_run(run: dict[str, Any]) -> dict[str, Any]:
+    # user_id is an internal ownership field the caller already knows (it's
+    # always their own, post-ownership-check) — no need to echo it back.
+    return {key: value for key, value in run.items() if key != "user_id"}
 
 
 def create_app(
@@ -449,9 +459,15 @@ def create_app(
         csrf_token = auth.generate_csrf_token(user_id=user["id"], token_version=user["token_version"])
         return _envelope({"token": token, "csrf_token": csrf_token, "email": user["email"], "tier": user["tier"]})
 
-    @app.get("/v1/auth/verify")
-    def verify_email(token: str) -> dict[str, Any]:
-        user = research_service.store.verify_email(token=token, now=datetime.now(UTC).isoformat())
+    @app.post("/v1/auth/verify")
+    def verify_email(payload: VerifyEmailCreate) -> dict[str, Any]:
+        # POST with the token in the body, not a GET query param — a GET
+        # would land the single-use token in server access logs and any
+        # Referer header on outbound links from the verify page. No CSRF
+        # dependency needed here: this isn't cookie/session-authenticated,
+        # the token itself is the sole credential, same as a password-reset
+        # flow.
+        user = research_service.store.verify_email(token=payload.token, now=datetime.now(UTC).isoformat())
         if user is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification link")
         return _envelope({"email": user["email"], "email_verified": True})
@@ -571,7 +587,7 @@ def create_app(
             )
         except ResearchExecutionError as error:
             _handle_research_error(error)
-        return _envelope(run)
+        return _envelope(_public_run(run))
 
     @app.post("/v1/research-runs/full", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_csrf)])
     def create_full_research_run(payload: ResearchRunFullCreate, user: dict[str, Any] = Depends(require_quota)) -> dict[str, Any]:
@@ -588,7 +604,7 @@ def create_app(
             )
         except ResearchExecutionError as error:
             _handle_research_error(error)
-        return _envelope(run)
+        return _envelope(_public_run(run))
 
     @app.get("/v1/research-runs/{run_id}")
     async def get_research_run(run_id: str, user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
@@ -597,7 +613,7 @@ def create_app(
         except KeyError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         _check_run_ownership(run, user)
-        return _envelope(run)
+        return _envelope(_public_run(run))
 
     @app.post("/v1/research-runs/{run_id}/enrich/{domain}", dependencies=[Depends(require_csrf)])
     def enrich_research_run(
@@ -624,7 +640,7 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error)) from error
         except ResearchExecutionError as error:
             _handle_research_error(error)
-        return _envelope(run)
+        return _envelope(_public_run(run))
 
     @app.get("/v1/research-runs/{run_id}/report")
     async def get_research_report(run_id: str, user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:

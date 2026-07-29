@@ -172,7 +172,7 @@ class AuthTests(unittest.TestCase):
             client = TestClient(create_app(service), base_url="https://testserver")
             client.post("/v1/auth/signup", json={"email": "csrf-run@b.com", "password": "Testpass123!"})
             token = self._last_verification_token()
-            client.get(f"/v1/auth/verify?token={token}")
+            client.post("/v1/auth/verify", json={"token": token})
             login = client.post("/v1/auth/login", json={"email": "csrf-run@b.com", "password": "Testpass123!"})
             self.assertEqual(login.status_code, 200)
             csrf_token = login.json()["data"]["csrf_token"]
@@ -320,16 +320,16 @@ class AuthTests(unittest.TestCase):
             client = self._client(directory)
             client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
             token = self._last_verification_token()
-            response = client.get(f"/v1/auth/verify?token={token}")
+            response = client.post("/v1/auth/verify", json={"token": token})
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.json()["data"]["email_verified"])
-            replay = client.get(f"/v1/auth/verify?token={token}")
+            replay = client.post("/v1/auth/verify", json={"token": token})
             self.assertEqual(replay.status_code, 400)
 
     def test_verify_email_rejects_unknown_token(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             client = self._client(directory)
-            response = client.get("/v1/auth/verify?token=not-a-real-token")
+            response = client.post("/v1/auth/verify", json={"token": "not-a-real-token"})
             self.assertEqual(response.status_code, 400)
 
     def test_verify_email_rejects_expired_token(self) -> None:
@@ -339,7 +339,7 @@ class AuthTests(unittest.TestCase):
             token = self._last_verification_token()
             user = store.get_user_by_email("a@b.com")
             store.set_verification_token(user_id=user["id"], token=token, expires_at="2000-01-01T00:00:00+00:00")
-            response = client.get(f"/v1/auth/verify?token={token}")
+            response = client.post("/v1/auth/verify", json={"token": token})
             self.assertEqual(response.status_code, 400)
 
     def test_require_quota_blocks_unverified_user_even_with_quota_remaining(self) -> None:
@@ -361,7 +361,7 @@ class AuthTests(unittest.TestCase):
             signup = client.post("/v1/auth/signup", json={"email": "a@b.com", "password": "Testpass123!"})
             token = signup.json()["data"]["token"]
             verification_token = self._last_verification_token()
-            client.get(f"/v1/auth/verify?token={verification_token}")
+            client.post("/v1/auth/verify", json={"token": verification_token})
             response = client.post("/v1/auth/resend-verification", headers={"Authorization": f"Bearer {token}"})
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.json()["data"]["already_verified"])
@@ -379,8 +379,8 @@ class AuthTests(unittest.TestCase):
             second_verification_token = self._last_verification_token()
             self.assertNotEqual(first_verification_token, second_verification_token)
             # the old token is invalidated once a new one is issued
-            self.assertEqual(client.get(f"/v1/auth/verify?token={first_verification_token}").status_code, 400)
-            self.assertEqual(client.get(f"/v1/auth/verify?token={second_verification_token}").status_code, 200)
+            self.assertEqual(client.post("/v1/auth/verify", json={"token": first_verification_token}).status_code, 400)
+            self.assertEqual(client.post("/v1/auth/verify", json={"token": second_verification_token}).status_code, 200)
 
     def test_resend_verification_rate_limited_after_three_attempts_per_hour(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
