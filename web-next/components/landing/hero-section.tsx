@@ -232,12 +232,12 @@ export function HeroSection({ stats }: HeroSectionProps) {
       </div>
       
       {/* Stats — 3 metrics static, no auto-scroll */}
-      <div 
-        className={`absolute bottom-12 left-0 right-0 px-6 lg:px-12 transition-all duration-700 delay-500 ${
+      <div
+        className={`absolute bottom-12 left-0 right-0 transition-all duration-700 delay-500 ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}
       >
-        <div className="max-w-[1400px] mx-auto flex items-start gap-10 lg:gap-20">
+        <div className="max-w-[1400px] mx-auto flex items-start gap-10 px-6 lg:gap-20 lg:px-12">
           {[
             { value: stats.skus, label: t("hero.statSkus") },
             { value: stats.priceSnapshots, label: t("hero.statPrices") },
