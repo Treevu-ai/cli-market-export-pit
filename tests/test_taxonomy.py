@@ -163,6 +163,17 @@ class TaxonomyTests(unittest.TestCase):
             )
             self.assertEqual(hs, "090422")
 
+    def test_resolve_hs_code_for_goldenberry_synonym(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            hs = resolve_hs_code(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="aguaymanto deshidratado para exportacion",
+            )
+            self.assertEqual(hs, "081090")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -156,6 +156,7 @@ export const es = {
       Banano: "Banano",
       Limón: "Limón",
       Páprika: "Páprika",
+      Aguaymanto: "Aguaymanto",
     },
     statCategoriesLabel: "Categorías con caso real",
     statMarketLabel: "Cualquier mercado destino",

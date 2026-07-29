@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Grape, FlaskConical, Wheat, Leaf, Citrus, Sprout, Coffee, Wine, Pill, Cherry, Nut, Flower2, Flame } from "lucide-react";
+import { Grape, FlaskConical, Wheat, Leaf, Citrus, Sprout, Coffee, Wine, Pill, Cherry, Nut, Flower2, Flame, CircleDot } from "lucide-react";
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const integrations = [
@@ -25,6 +25,7 @@ const integrations = [
   { name: "Banano", category: "PE→EU", query: "banano orgánico", market: "EU", Icon: Leaf },
   { name: "Limón", category: "PE→US", query: "limón sutil", market: "US", Icon: Citrus },
   { name: "Páprika", category: "PE→US", query: "paprika molida", market: "US", Icon: Flame },
+  { name: "Aguaymanto", category: "PE→US", query: "aguaymanto deshidratado", market: "US", Icon: CircleDot },
 ];
 
 export function IntegrationsSection() {

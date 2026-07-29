@@ -81,6 +81,11 @@ _SEED_SYNONYMS: list[tuple[str, str]] = [
     ("páprika", "paprika"),
     ("paprika molida", "paprika"),
     ("ground paprika", "paprika"),
+    ("aguaymanto", "goldenberry"),
+    ("aguaymanto deshidratado", "goldenberry"),
+    ("goldenberry", "goldenberry"),
+    ("cape gooseberry", "goldenberry"),
+    ("physalis", "goldenberry"),
 ]
 
 _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
@@ -104,6 +109,7 @@ _SEED_HS_MAPPINGS: list[tuple[str, str, str]] = [
     ("banana", "080390", "Fresh bananas, other than plantains"),
     ("lime", "080550", "Fresh or dried lemons and limes"),
     ("paprika", "090422", "Paprika: fruits of the genus Capsicum, crushed or ground"),
+    ("goldenberry", "081090", "Fresh goldenberry (aguaymanto/physalis), other fresh fruit n.e.s. (basket code, not exclusive)"),
 ]
 
 
