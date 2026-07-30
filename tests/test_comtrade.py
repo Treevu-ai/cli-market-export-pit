@@ -48,6 +48,20 @@ class ComtradeRequestConstructionTests(unittest.TestCase):
         self.assertIn("cmdCode=0810", request.full_url)
         self.assertEqual(request.get_header("Ocp-apim-subscription-key"), "test-key")
 
+    def test_search_defaults_reporter_country_to_peru(self) -> None:
+        """Regression: reporter_country defaulted to "0" (World aggregate),
+        which returns zero HS6-level records from the real Comtrade API --
+        confirmed live, this silently zeroed out the entire trade domain on
+        every research run since research.py's enrich_with_trade() never
+        passed reporter_country itself. PIT's whole premise is Peru's
+        export potential, so Peru is the correct default."""
+        connector = ComtradeConnector(subscription_key="test-key")
+        with patch("pit.comtrade.urlopen", return_value=_fake_response(TRADE_BODY)) as mocked_urlopen:
+            connector.search(query="blueberry", from_publication_date="2020-01-01", limit=5, target_market="US")
+
+        request = mocked_urlopen.call_args[0][0]
+        self.assertIn("reporterCode=604", request.full_url)
+
     def test_search_parses_real_field_names(self) -> None:
         connector = ComtradeConnector(subscription_key="test-key")
         with patch("pit.comtrade.urlopen", return_value=_fake_response(TRADE_BODY)):

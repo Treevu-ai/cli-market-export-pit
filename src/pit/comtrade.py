@@ -73,7 +73,12 @@ class ComtradeConnector:
         from_publication_date: str,
         limit: int,
         hs_code: str | None = None,
-        reporter_country: str = "0",
+        # Confirmed live: reporterCode=0 ("World" aggregate) returns zero
+        # HS6-level records from the real Comtrade API -- it needs an
+        # actual reporting country. PIT's whole premise is Peru's export
+        # potential, so Peru (604) is the correct default reporter rather
+        # than an aggregate that silently returns nothing.
+        reporter_country: str = "604",
         partner_country: str | None = None,
         target_market: str | None = None,
         flow: str = "all",
