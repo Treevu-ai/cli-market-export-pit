@@ -273,11 +273,12 @@ def _handle_research_error(error: ResearchExecutionError) -> None:
     ) from error
 
 
-# One specific, hardcoded research run (cacao alto flavanol -> EU, created
-# 2026-07-30 against the fully fixed pipeline) shown publicly at /report/
-# with no run_id -- deliberately a single explicit constant, not a general
-# auth bypass, so this can never accidentally expose a real user's run.
-EXAMPLE_REPORT_RUN_ID = "rr_3ff2a5a7aa234068b4d624ac648da48d"
+# One specific, hardcoded research run (high flavanol cocoa -> US, created
+# 2026-07-30 against the fully fixed pipeline, including the Comtrade
+# reporter_country fix) shown publicly at /report/ with no run_id --
+# deliberately a single explicit constant, not a general auth bypass, so
+# this can never accidentally expose a real user's run.
+EXAMPLE_REPORT_RUN_ID = "rr_29795aa0318e4acfa2c2be4ea60d467e"
 
 
 def _check_run_ownership(run: dict[str, Any], user: dict[str, Any]) -> None:
