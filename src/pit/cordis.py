@@ -39,20 +39,30 @@ class CORDISResponse:
 class CORDISConnector:
     source = "cordis"
     license_name = "CORDIS Open Data; attribution required"
-    base_url = "https://cordis.europa.eu/api/search"
+    # Confirmed live via the CORDIS website's own network calls (captured with
+    # a real browser session): cordis.europa.eu/api/search never existed --
+    # it 404s with the site's SPA shell, not a JSON error. The real endpoint
+    # is /api/search/results, and it accepts a Lucene-style `q` query
+    # combining a `contenttype='project'` filter (confirmed by toggling the
+    # site's own "Projects" collection checkbox) with quoted AND-joined
+    # search terms (confirmed by typing a multi-word query into the site's
+    # own search box).
+    base_url = "https://cordis.europa.eu/api/search/results"
 
     def search(self, *, query: str, from_publication_date: str, limit: int) -> CORDISResponse:
+        terms = query.split()
+        terms_clause = " AND ".join(f"'{term}'" for term in terms) if terms else "'*'"
+        cql_query = f"contenttype='project' AND ({terms_clause})"
         params: dict[str, str] = {
-            "query": query,
-            "startDate": from_publication_date,
-            "endDate": "3000-01-01",
-            "pageSize": str(limit),
-            "format": "json",
+            "q": cql_query,
+            "p": "1",
+            "num": str(limit),
+            "srt": "Relevance:decreasing",
         }
         request_url = f"{self.base_url}?{urlencode(params)}"
         request = Request(
             request_url,
-            headers={"User-Agent": "PIT/0.1 research-service"},
+            headers={"User-Agent": "PIT/0.1 research-service", "Accept": "application/json"},
         )
         try:
             with urlopen(request, timeout=20) as response:
@@ -76,9 +86,7 @@ class CORDISConnector:
 
         try:
             body = json.loads(raw_content)
-            projects = body.get("projects", {}).get("project", [])
-            if isinstance(projects, dict):
-                projects = [projects]
+            projects = body.get("payload", {}).get("results", [])
         except (json.JSONDecodeError, AttributeError, TypeError) as error:
             raise CORDISRequestError(
                 "CORDIS response did not contain projects",
@@ -91,16 +99,24 @@ class CORDISConnector:
         works: list[dict[str, Any]] = []
         for project in projects:
             title = project.get("title")
-            if not title:
+            project_id = project.get("reference") or project.get("id")
+            if not title or not project_id:
                 continue
+            if not _within_start_date(project.get("startDate"), from_publication_date):
+                continue
+            # Confirmed live: the search-results endpoint only returns
+            # title/dates/acronym/coordinating-country for a project preview
+            # -- funding amount, currency, and participant organizations
+            # require a separate per-project detail call, out of scope here.
+            # Honest empty placeholders instead of fabricating values.
             works.append({
-                "project_id": project.get("id"),
+                "project_id": str(project_id),
                 "title": title,
                 "start_date": project.get("startDate"),
                 "end_date": project.get("endDate"),
-                "funding_amount": project.get("fundingAmount"),
-                "currency": project.get("currency"),
-                "organizations": project.get("organizations", {}).get("organization", []),
+                "funding_amount": None,
+                "currency": None,
+                "organizations": [],
                 "source": "cordis",
             })
 
@@ -111,3 +127,19 @@ class CORDISConnector:
             raw_content=raw_content,
             works=works,
         )
+
+
+def _within_start_date(start_date: str | None, from_publication_date: str) -> bool:
+    # CORDIS renders startDate as "1 {{month_07}} 2016" (an untranslated
+    # i18n placeholder for the month, confirmed live) -- not machine-
+    # parseable as a real date. Fall back to comparing just the year against
+    # from_publication_date's year rather than dropping every result.
+    if not start_date:
+        return True
+    year_digits = "".join(char for char in start_date[-4:] if char.isdigit())
+    if not year_digits:
+        return True
+    try:
+        return int(year_digits) >= int(from_publication_date[:4])
+    except ValueError:
+        return True
