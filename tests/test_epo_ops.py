@@ -89,6 +89,7 @@ class EPOOPSTokenExpiryTests(unittest.TestCase):
                 unauthorized,  # search call with the (now server-side expired) token
                 _fake_response(b'{"access_token":"token-2","expires_in":"1199"}'),  # forced refresh
                 _fake_response(SEARCH_BODY),  # retried search call succeeds
+                _fake_response(b'{"ops:world-patent-data":{"exchange-documents":{"exchange-document":[]}}}'),  # biblio
             ],
         ):
             connector._get_access_token()  # warm the cache, as a long-lived process would have
@@ -136,7 +137,11 @@ class EPOOPSSearchRequestConstructionTests(unittest.TestCase):
         connector = EPOOPSConnector("key", "secret", time_func=clock)
         with patch(
             "pit.epo_ops.urlopen",
-            side_effect=[_fake_response(TOKEN_BODY), _fake_response(SEARCH_BODY)],
+            side_effect=[
+                _fake_response(TOKEN_BODY),
+                _fake_response(SEARCH_BODY),
+                _fake_response(b'{"ops:world-patent-data":{"exchange-documents":{"exchange-document":[]}}}'),
+            ],
         ) as mocked_urlopen:
             connector.search(query="blueberry", from_publication_date="2020-01-01", limit=5)
 
@@ -158,13 +163,86 @@ class EPOOPSSearchRequestConstructionTests(unittest.TestCase):
         connector = EPOOPSConnector("key", "secret", time_func=clock)
         with patch(
             "pit.epo_ops.urlopen",
-            side_effect=[_fake_response(TOKEN_BODY), _fake_response(SEARCH_BODY)],
+            side_effect=[
+                _fake_response(TOKEN_BODY),
+                _fake_response(SEARCH_BODY),
+                _fake_response(b'{"ops:world-patent-data":{"exchange-documents":{"exchange-document":[]}}}'),
+            ],
         ):
             result = connector.search(query="blueberry", from_publication_date="2020-01-01", limit=5)
 
         self.assertEqual(len(result.works), 1)
         self.assertEqual(result.works[0]["patent_number"], "EP4781832A1")
         self.assertEqual(result.works[0]["family_id"], "123")
+
+
+# Real shape confirmed live against
+# .../publication/docdb/EP.4781832.A1/biblio -- title is repeated once per
+# language, applicant/inventor names appear twice (epodoc + original
+# data-format), and IPC text carries irregular fixed-width padding.
+BIBLIO_BODY = (
+    b'{"ops:world-patent-data":{"exchange-documents":{"exchange-document":'
+    b'[{"@country":"EP","@doc-number":"4781832","@kind":"A1","bibliographic-data":'
+    b'{"invention-title":[{"@lang":"de","$":"STABILISIERTE"},'
+    b'{"@lang":"en","$":"STABILIZED OIL-BASED MICROPARTICLES"}],'
+    b'"classifications-ipcr":{"classification-ipcr":'
+    b'[{"text":{"$":"A23D   7/   005            A I"}}]},'
+    b'"parties":{"applicants":{"applicant":'
+    b'[{"@data-format":"epodoc","applicant-name":{"name":{"$":"CUBIQ FOODS S L [ES]"}}},'
+    b'{"@data-format":"original","applicant-name":{"name":{"$":"Cubiq Foods, S.L."}}}]}},'
+    b'"publication-reference":{"document-id":'
+    b'[{"date":{"$":"20260415"}}]}}}]}}}'
+)
+
+
+class EPOOPSBiblioEnrichmentTests(unittest.TestCase):
+    """Confirmed live: the /search endpoint never carries title/applicant/IPC
+    data, but a follow-up batch call to the /biblio endpoint (comma-separated
+    docdb ids in one request) does. search() should enrich each bare result
+    with real title/assignees/ipc_codes/publication_date, and must not fail
+    the whole search if biblio enrichment errors out."""
+
+    def test_search_enriches_results_with_biblio_details(self) -> None:
+        clock = FakeClock()
+        connector = EPOOPSConnector("key", "secret", time_func=clock)
+        with patch(
+            "pit.epo_ops.urlopen",
+            side_effect=[_fake_response(TOKEN_BODY), _fake_response(SEARCH_BODY), _fake_response(BIBLIO_BODY)],
+        ) as mocked_urlopen:
+            result = connector.search(query="blueberry", from_publication_date="2020-01-01", limit=5)
+
+        biblio_request = mocked_urlopen.call_args_list[2][0][0]
+        self.assertTrue(
+            biblio_request.full_url.startswith(
+                "https://ops.epo.org/3.2/rest-services/published-data/publication/docdb/EP.4781832.A1/biblio"
+            )
+        )
+        work = result.works[0]
+        self.assertEqual(work["title"], "STABILIZED OIL-BASED MICROPARTICLES")
+        self.assertEqual(work["assignees"], ["CUBIQ FOODS S L [ES]", "Cubiq Foods, S.L."])
+        self.assertEqual(work["ipc_codes"], ["A23D 7/ 005 A I"])
+        self.assertEqual(work["publication_date"], "20260415")
+
+    def test_search_keeps_bare_results_if_biblio_call_fails(self) -> None:
+        clock = FakeClock()
+        connector = EPOOPSConnector("key", "secret", time_func=clock)
+        biblio_error = HTTPError(
+            url="https://ops.epo.org/3.2/rest-services/published-data/publication/docdb/EP.4781832.A1/biblio",
+            code=500,
+            msg="Server Error",
+            hdrs=None,
+            fp=None,
+        )
+        biblio_error.read = lambda: b'{"error":"internal"}'
+        with patch(
+            "pit.epo_ops.urlopen",
+            side_effect=[_fake_response(TOKEN_BODY), _fake_response(SEARCH_BODY), biblio_error],
+        ):
+            result = connector.search(query="blueberry", from_publication_date="2020-01-01", limit=5)
+
+        self.assertEqual(len(result.works), 1)
+        self.assertEqual(result.works[0]["patent_number"], "EP4781832A1")
+        self.assertEqual(result.works[0]["title"], "")
 
 
 if __name__ == "__main__":

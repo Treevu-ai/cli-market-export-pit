@@ -50,6 +50,11 @@ class EPOOPSConnector:
     # via 8.8.8.8) -- EPO's Apigee gateway serves the token endpoint from
     # the same host as the API itself, not a separate oauth subdomain.
     token_url = "https://ops.epo.org/3.2/auth/accesstoken"
+    # Confirmed live: this batch endpoint accepts multiple comma-separated
+    # docdb ids (COUNTRY.NUMBER.KIND, e.g. "EP.4781832.A1") in a single call
+    # and returns real titles/applicants/IPC codes -- the plain /search
+    # endpoint above never carries that data.
+    biblio_base_url = "https://ops.epo.org/3.2/rest-services/published-data/publication/docdb"
     # EPO tokens are typically valid ~20min (1200s); used only if the OAuth
     # response omits expires_in. The safety margin refreshes a bit early so a
     # request never starts with a token that expires mid-flight.
@@ -225,10 +230,22 @@ class EPOOPSConnector:
             ) from error
 
         works: list[dict[str, Any]] = []
+        docdb_ids: list[str] = []
         for item in results:
             patent = _normalize_patent(item)
             if patent:
                 works.append(patent)
+                docdb_ids.append(_docdb_id(item))
+
+        if works:
+            # Best-effort enrichment: a failed/partial biblio lookup should
+            # not sink the whole search, since the bare results above are
+            # already a valid (if less useful) answer.
+            details_by_docdb = self._fetch_biblio(docdb_ids, access_token)
+            for patent, docdb_id in zip(works, docdb_ids):
+                details = details_by_docdb.get(docdb_id)
+                if details:
+                    patent.update(details)
 
         return EPOOPSResponse(
             request_url=request_url,
@@ -239,13 +256,108 @@ class EPOOPSConnector:
         )
 
 
+    def _fetch_biblio(self, docdb_ids: list[str], access_token: str) -> dict[str, dict[str, Any]]:
+        request_url = f"{self.biblio_base_url}/{','.join(docdb_ids)}/biblio"
+        request = Request(
+            request_url,
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+        try:
+            with urlopen(request, timeout=20) as response:
+                raw_content = response.read()
+        except (HTTPError, URLError):
+            return {}
+
+        try:
+            body = json.loads(raw_content)
+            documents = (
+                body.get("ops:world-patent-data", {})
+                .get("exchange-documents", {})
+                .get("exchange-document", [])
+            )
+            if isinstance(documents, dict):
+                documents = [documents]
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            return {}
+
+        details_by_docdb: dict[str, dict[str, Any]] = {}
+        for document in documents:
+            docdb_id = f"{document.get('@country', '')}.{document.get('@doc-number', '')}.{document.get('@kind', '')}"
+            bibliographic_data = document.get("bibliographic-data", {})
+            details_by_docdb[docdb_id] = {
+                "title": _extract_title(bibliographic_data),
+                "assignees": _extract_assignees(bibliographic_data),
+                "ipc_codes": _extract_ipc_codes(bibliographic_data),
+                "publication_date": _extract_publication_date(bibliographic_data),
+            }
+        return details_by_docdb
+
+
+def _docdb_id(item: dict[str, Any]) -> str:
+    document_id = item.get("document-id", {})
+    country = document_id.get("country", {}).get("$", "")
+    doc_number = document_id.get("doc-number", {}).get("$", "")
+    kind = document_id.get("kind", {}).get("$", "")
+    return f"{country}.{doc_number}.{kind}"
+
+
+def _as_list(value: Any) -> list[Any]:
+    if isinstance(value, dict):
+        return [value]
+    if isinstance(value, list):
+        return value
+    return []
+
+
+def _extract_title(bibliographic_data: dict[str, Any]) -> str:
+    titles = _as_list(bibliographic_data.get("invention-title"))
+    for title in titles:
+        if title.get("@lang") == "en":
+            return title.get("$", "")
+    return titles[0].get("$", "") if titles else ""
+
+
+def _extract_assignees(bibliographic_data: dict[str, Any]) -> list[str]:
+    applicants = _as_list(bibliographic_data.get("parties", {}).get("applicants", {}).get("applicant"))
+    names: list[str] = []
+    for applicant in applicants:
+        name = applicant.get("applicant-name", {}).get("name", {}).get("$", "")
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def _extract_ipc_codes(bibliographic_data: dict[str, Any]) -> list[str]:
+    classifications = _as_list(bibliographic_data.get("classifications-ipcr", {}).get("classification-ipcr"))
+    codes: list[str] = []
+    for classification in classifications:
+        raw_text = classification.get("text", {}).get("$", "")
+        # EPO's IPC text carries irregular fixed-width padding (e.g.
+        # "A23D   7/   005            A I") -- confirmed live.
+        normalized = " ".join(raw_text.split())
+        if normalized and normalized not in codes:
+            codes.append(normalized)
+    return codes
+
+
+def _extract_publication_date(bibliographic_data: dict[str, Any]) -> str:
+    document_ids = _as_list(bibliographic_data.get("publication-reference", {}).get("document-id"))
+    for document_id in document_ids:
+        date_value = document_id.get("date", {}).get("$", "")
+        if date_value:
+            return date_value
+    return ""
+
+
 def _normalize_patent(item: dict[str, Any]) -> dict[str, Any] | None:
     # This is a lightweight publication-reference hit from the /search
     # endpoint -- confirmed live it carries no title/applicant/IPC data at
-    # all (that requires a separate per-patent /biblio detail call, out of
-    # scope here). Surface what's actually available (family id + the
-    # document-id triplet) instead of silently dropping every result via a
-    # title check that can never pass against this endpoint's real shape.
+    # all. title/assignees/ipc_codes/publication_date below are honest
+    # empty placeholders, overwritten by search()'s follow-up batch
+    # /biblio call when that call succeeds. Surface what's actually
+    # available here (family id + the document-id triplet) instead of
+    # silently dropping every result via a title check that can never
+    # pass against this endpoint's real shape.
     document_id = item.get("document-id", {})
     country = document_id.get("country", {}).get("$", "")
     doc_number = document_id.get("doc-number", {}).get("$", "")
