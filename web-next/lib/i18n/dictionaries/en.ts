@@ -298,7 +298,7 @@ export const en = {
     noResultsDetail: "Run a full analysis to see the score, domains, and traceable evidence.",
     noRunId: "Missing analysis identifier.",
     noRunIdDetail: "Open this report from the console or generate a new analysis.",
-    exampleReportBanner: "You're viewing an example report (high flavanol cocoa → US) generated with PIT's real engine.",
+    exampleReportBanner: "You're viewing an example report (cocoa → Mexico) generated with PIT's real engine.",
     exampleReportCta: "Run your own analysis →",
     backToConsole: "◂ Console",
   },
