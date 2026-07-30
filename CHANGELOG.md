@@ -2,6 +2,37 @@
 
 All notable changes to this project are documented in this file.
 
+## 2026-07-30
+
+Full audit of PIT's 8 evidence-source connectors and scoring pipeline: 22 completed research runs existed in production, but every single one was scored "Insufficient evidence" (coverage_factor 0.4–0.52). Traced this to most external connectors being broken, plus a scoring gap that silently dropped nearly half the evidence domains from the final score. Fixed both, then extended coverage with two new sources.
+
+### Fixed — connectors (each confirmed live against the real API before merging)
+- **GDELT**: had zero retry logic — a single 429/5xx aborted the whole trend domain. Added the same retry/backoff pattern already proven in `semanticscholar.py`.
+- **OpenFDA**: query was an unscoped bare phrase (OpenFDA requires `field:value` Lucene syntax) with hyphenated ISO dates instead of `report_date:[YYYYMMDD TO ...]`. Fixed both. Separately, discovered OpenFDA returns HTTP 404 with `{"error":{"code":"NOT_FOUND"}}` for a genuine zero-recalls query — the normal case for most food products, not a failure — which was tanking the whole `regulatory` pipeline step on almost every run; now treated as an empty result.
+- **NIH RePORTER**: was sending a GET with query-string params against a POST-only, JSON-body API. Rewrote the request entirely.
+- **NSF Awards**: wrong base URL, wrong param names (`startDate`/`endDate`/`limit` → `dateStart`/`dateEnd` MM/DD/YYYY + `rpp` capped at 25), and parsed a top-level `award` key that doesn't exist (real shape is nested under `response.award`).
+- **UN Comtrade**: complete rewrite — real endpoint is `comtradeapi.un.org/data/v1/get/...` with an `Ocp-Apim-Subscription-Key` header (Azure APIM), `period` as a CSV year list (not a hyphenated range), and real field names (`primaryValue`/`netWgt`, not `tradeValue`/`netWeight`).
+- **Climatiq**: real endpoint is `/data/v1/search` (not `/v2/search`), requires a `data_version` param, and nests results under `results` with a `factor` field (not `data`/`co2e_factor`).
+- **EPO OPS**: OAuth host (`oauth.epo.org`) has no DNS record at all; the token endpoint actually lives on `ops.epo.org`. Search path needed a `/published-data/` segment. Pagination is the `X-OPS-Range` header, not a query param — date filtering is CQL embedded in `q`. A quoted search term or an open-ended future date both 500 on EPO's side; fixed to unquoted terms and a capped date range. A non-English query with zero matches returns HTTP 404 `EntityNotFound` — a legitimate empty result, not an error.
+- **EPO OPS biblio enrichment**: the `/search` endpoint never carries title/applicant/IPC data — every result previously showed patent counts with no qualitative detail. Added a follow-up batch call to the `/biblio` endpoint (all matched patents in one request) that fills in real titles, applicant/assignee names, and IPC classification codes; falls back to the bare results if the batch call fails.
+- **CORDIS**: `cordis.europa.eu/api/search` 404s with the site's own SPA shell, not a JSON error — it was never a real endpoint. Found the actual one (`/api/search/results`, with a `contenttype='project'` filter) by capturing the CORDIS website's own network calls in a live browser session. No API key required.
+
+### Added
+- **WITS (World Integrated Trade Solution / UNCTAD TRAINS)**: new connector for tariff barriers, a gap Comtrade's flow data never covered — what tariff a Peru-origin export actually pays entering the target market (e.g. cocoa powder into the US: 13.64% MFN vs 0% preferential under the Peru-US trade agreement). Folded into the existing `trade` domain rather than given its own scoring weight. WITS's WAF returns HTTP 403 for any request with no `User-Agent` header and occasionally times out under repeated calls — both handled (custom UA + retry/backoff).
+- **USDA FAS (PSD database)**: global production/supply/demand context. Its ~55 tracked commodities are bulk agricultural goods (grains, oilseeds, dairy) — confirmed live this covers only 3 of PIT's ~24 specialty products (café, uva, limón); scoped to match only those rather than guess a commodity code for the rest.
+
+### Fixed — scoring
+- `ScoringEngine.weights` only ever covered 5 of 9 evidence domains (`science`, `patent`, `trend`, `trade`, `commerce`). `macro` (BCRP), `regulatory` (OpenFDA/EFSA/FoodData Central), `sustainability` (Climatiq), and `technology_scout` (CORDIS/NIH/NSF) — 8 of 16 connectors — were being fetched, stored as real evidence, and even shown in the report UI, but silently dropped before scoring (`build_domain_scores` skips any domain not in `weights`). Confirmed live: one real run had domain summaries for 8 of 9 domains but `domain_scores` rows for only 5. Rebalanced weights across all 9 domains and added the missing `estimate_coverage`/`estimate_score` branches for `macro`.
+- Re-ran the "arándano orgánico" PE case end to end after the connector fixes: `coverage_factor` went from 0.52 (patent + trade domains entirely missing) to 0.76 — crossing the 0.60 threshold for the first time in this dataset's history and producing a real "Deprioritize" recommendation instead of "Insufficient evidence."
+
+### Fixed — landing page
+- The "Integrations" grid showed a single fixed export corridor per product (e.g. "PE→US"), when most of these are genuinely multi-market exports — updated to show the top two real destinations per product (US/EU are consistently the largest for Peru's agroexport lines).
+- The "real case" metrics section (13/17/48) was a hardcoded constant tied to blueberry→US that never reflected any live pipeline run. Swapped the featured case to high-flavanol cacao→EU (the best real result among 3 candidates tested live against the fixed pipeline) and refreshed the figures from an actual run: 38 real science evidence records, 11 PE retail stores compared, 136 real shelf products found. Renamed "Commercial references" → "Stores compared" to match what the number actually is.
+- The infrastructure section's source/domain counters ("15 fuentes", "8 dominios") were the same kind of stale hardcoded constant — updated to 18 sources / 9 domains, recomputed from the real connector list, with the per-category breakdown (5 ciencia / 6 mercado / 3 regulatorio / 4 I+D y proyectos) and the domain list (added the missing "macro") to match.
+
+### Security
+- Closed PR #4 ("technical specs for 17 public API connectors") without merging: it planned to add FAOSTAT (`CC BY-NC-SA 3.0`, non-commercial license, unresolved commercial-use question) and Google Trends via headless-Chrome scraping (the spec itself acknowledged this risks Google's Terms of Service) to a paid commercial product. Deleted the associated branch.
+
 ## 2026-07-28
 
 ### Added
