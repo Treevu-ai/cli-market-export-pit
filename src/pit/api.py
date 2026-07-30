@@ -273,6 +273,13 @@ def _handle_research_error(error: ResearchExecutionError) -> None:
     ) from error
 
 
+# One specific, hardcoded research run (cacao alto flavanol -> EU, created
+# 2026-07-30 against the fully fixed pipeline) shown publicly at /report/
+# with no run_id -- deliberately a single explicit constant, not a general
+# auth bypass, so this can never accidentally expose a real user's run.
+EXAMPLE_REPORT_RUN_ID = "rr_3ff2a5a7aa234068b4d624ac648da48d"
+
+
 def _check_run_ownership(run: dict[str, Any], user: dict[str, Any]) -> None:
     # 404, not 403: a non-owner should not be able to distinguish "run exists
     # but isn't yours" from "run doesn't exist" — that alone leaks information.
@@ -645,6 +652,18 @@ def create_app(
         except ResearchExecutionError as error:
             _handle_research_error(error)
         return _envelope(_public_run(run))
+
+    @app.get("/v1/public/example-report")
+    async def get_public_example_report() -> dict[str, Any]:
+        run = research_service.store.get_run_detail(EXAMPLE_REPORT_RUN_ID)
+        scores = scoring_svc.calculate_scores(EXAMPLE_REPORT_RUN_ID)
+        domain_scores = scoring_svc.build_domain_scores(EXAMPLE_REPORT_RUN_ID)
+        report = report_gen.generate_json(run=run, scores=scores, domain_scores=domain_scores)
+        return {
+            "data": report,
+            "meta": {"confidence": "ok", "evidence_count": len(run.get("evidence", []))},
+            "trace": {"version": "0.1.0", "timestamp": datetime.now(UTC).isoformat()},
+        }
 
     @app.get("/v1/research-runs/{run_id}/report")
     async def get_research_report(run_id: str, user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
