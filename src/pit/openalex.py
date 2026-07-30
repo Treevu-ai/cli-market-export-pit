@@ -71,9 +71,9 @@ class OpenAlexConnector:
                 request_url=request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise OpenAlexRequestError(
-                f"OpenAlex network error: {error.reason}",
+                f"OpenAlex network error: {error}",
                 request_url=request_url,
                 request_params=params,
             ) from error

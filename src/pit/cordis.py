@@ -77,9 +77,9 @@ class CORDISConnector:
                 request_url=request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise CORDISRequestError(
-                f"CORDIS network error: {error.reason}",
+                f"CORDIS network error: {error}",
                 request_url=request_url,
                 request_params=params,
             ) from error

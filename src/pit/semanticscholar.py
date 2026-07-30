@@ -89,9 +89,9 @@ class SemanticScholarConnector:
                     time.sleep(2 ** attempt)
                     continue
                 raise last_error from error
-            except URLError as error:
+            except (URLError, TimeoutError) as error:
                 raise SemanticScholarRequestError(
-                    f"Semantic Scholar network error: {error.reason}",
+                    f"Semantic Scholar network error: {error}",
                     request_url=request_url,
                     request_params=params,
                 ) from error

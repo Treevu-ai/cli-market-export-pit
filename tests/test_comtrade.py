@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from pit.comtrade import ComtradeConnector
+from pit.comtrade import ComtradeConnector, ComtradeRequestError
 
 
 def _fake_response(body: bytes, status: int = 200):
@@ -61,6 +61,16 @@ class ComtradeRequestConstructionTests(unittest.TestCase):
 
         request = mocked_urlopen.call_args[0][0]
         self.assertIn("reporterCode=604", request.full_url)
+
+    def test_search_raises_comtrade_error_on_timeout_instead_of_crashing(self) -> None:
+        """Regression: urlopen's socket timeout surfaces as a bare
+        TimeoutError, not wrapped in URLError -- confirmed live, this
+        crashed a real production pipeline run mid-request. Same fix
+        applied across all 17 connectors."""
+        connector = ComtradeConnector(subscription_key="test-key")
+        with patch("pit.comtrade.urlopen", side_effect=TimeoutError("timed out")):
+            with self.assertRaises(ComtradeRequestError):
+                connector.search(query="blueberry", from_publication_date="2020-01-01", limit=5)
 
     def test_search_parses_real_field_names(self) -> None:
         connector = ComtradeConnector(subscription_key="test-key")

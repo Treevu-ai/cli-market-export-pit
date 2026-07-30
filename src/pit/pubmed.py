@@ -68,9 +68,9 @@ class PubMedConnector:
                 request_url=request_url,
                 request_params=search_params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise PubMedRequestError(
-                f"PubMed network error: {error.reason}",
+                f"PubMed network error: {error}",
                 request_url=request_url,
                 request_params=search_params,
             ) from error
@@ -117,9 +117,9 @@ class PubMedConnector:
                 request_url=summary_request_url,
                 request_params=summary_params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise PubMedRequestError(
-                f"PubMed summary network error: {error.reason}",
+                f"PubMed summary network error: {error}",
                 request_url=summary_request_url,
                 request_params=summary_params,
             ) from error

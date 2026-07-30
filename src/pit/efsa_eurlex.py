@@ -88,9 +88,9 @@ class EFSALexConnector:
                 request_url=request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise EFSALexRequestError(
-                f"EUR-Lex network error: {error.reason}",
+                f"EUR-Lex network error: {error}",
                 request_url=request_url,
                 request_params=params,
             ) from error

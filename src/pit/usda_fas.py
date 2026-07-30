@@ -128,9 +128,9 @@ class USDAFASConnector:
                 request_url=request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise USDAFASRequestError(
-                f"USDA FAS network error: {error.reason}",
+                f"USDA FAS network error: {error}",
                 request_url=request_url,
                 request_params=params,
             ) from error

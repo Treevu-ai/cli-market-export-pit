@@ -69,9 +69,9 @@ class CrossrefConnector:
                 request_url=request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise CrossrefRequestError(
-                f"Crossref network error: {error.reason}",
+                f"Crossref network error: {error}",
                 request_url=request_url,
                 request_params=params,
             ) from error

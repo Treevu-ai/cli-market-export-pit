@@ -90,9 +90,9 @@ class FoodDataCentralConnector:
                 request_url=safe_request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise FoodDataCentralRequestError(
-                f"FoodData Central network error: {error.reason}",
+                f"FoodData Central network error: {error}",
                 request_url=safe_request_url,
                 request_params=params,
             ) from error

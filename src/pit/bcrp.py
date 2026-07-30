@@ -97,9 +97,9 @@ class BCRPConnector:
                 request_url=request_url,
                 request_params=request_params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise BCRPRequestError(
-                f"BCRP network error: {error.reason}",
+                f"BCRP network error: {error}",
                 request_url=request_url,
                 request_params=request_params,
             ) from error

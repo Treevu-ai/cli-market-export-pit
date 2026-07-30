@@ -82,9 +82,9 @@ class NIHReporterConnector:
                 request_url=request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise NIHReporterRequestError(
-                f"NIH RePORTER network error: {error.reason}",
+                f"NIH RePORTER network error: {error}",
                 request_url=request_url,
                 request_params=params,
             ) from error

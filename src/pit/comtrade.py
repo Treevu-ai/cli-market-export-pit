@@ -121,9 +121,9 @@ class ComtradeConnector:
                 request_url=request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise ComtradeRequestError(
-                f"UN Comtrade network error: {error.reason}",
+                f"UN Comtrade network error: {error}",
                 request_url=request_url,
                 request_params=params,
             ) from error

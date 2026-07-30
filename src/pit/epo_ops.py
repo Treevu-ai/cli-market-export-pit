@@ -107,9 +107,9 @@ class EPOOPSConnector:
                 request_url=self.token_url,
                 request_params={"grant_type": "client_credentials"},
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise EPOOPSRequestError(
-                f"EPO OAuth network error: {error.reason}",
+                f"EPO OAuth network error: {error}",
                 request_url=self.token_url,
                 request_params={"grant_type": "client_credentials"},
             ) from error
@@ -199,9 +199,9 @@ class EPOOPSConnector:
                     request_url=request_url,
                     request_params=params,
                 ) from error
-            except URLError as error:
+            except (URLError, TimeoutError) as error:
                 raise EPOOPSRequestError(
-                    f"EPO OPS network error: {error.reason}",
+                    f"EPO OPS network error: {error}",
                     request_url=request_url,
                     request_params=params,
                 ) from error

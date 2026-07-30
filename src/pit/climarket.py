@@ -88,9 +88,9 @@ class CLIMarketConnector:
                 request_url=request_url,
                 request_params=params or body or {},
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise CLIMarketRequestError(
-                f"CLI Market network error: {error.reason}",
+                f"CLI Market network error: {error}",
                 request_url=request_url,
                 request_params=params or body or {},
             ) from error

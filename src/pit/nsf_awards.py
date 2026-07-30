@@ -73,9 +73,9 @@ class NSFAwardsConnector:
                 request_url=request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise NSFAwardsRequestError(
-                f"NSF Awards network error: {error.reason}",
+                f"NSF Awards network error: {error}",
                 request_url=request_url,
                 request_params=params,
             ) from error

@@ -74,9 +74,9 @@ class ClimatiqConnector:
                 request_url=request_url,
                 request_params=params,
             ) from error
-        except URLError as error:
+        except (URLError, TimeoutError) as error:
             raise ClimatiqRequestError(
-                f"Climatiq network error: {error.reason}",
+                f"Climatiq network error: {error}",
                 request_url=request_url,
                 request_params=params,
             ) from error

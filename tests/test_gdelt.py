@@ -50,6 +50,17 @@ class GDELTRetryTests(unittest.TestCase):
         self.assertEqual(ctx.exception.http_status, 404)
         self.assertEqual(mocked_urlopen.call_count, 1)
 
+    def test_search_raises_gdelt_error_on_timeout_instead_of_crashing(self) -> None:
+        """Regression: urlopen's socket timeout surfaces as a bare
+        TimeoutError, not wrapped in URLError -- confirmed live (this exact
+        exception escaped every connector's except clause and crashed a
+        real production pipeline run). Applied the same fix across all 17
+        connectors; this is the representative regression test."""
+        connector = GDELTConnector()
+        with patch("pit.gdelt.urlopen", side_effect=TimeoutError("timed out")), patch("pit.gdelt.time.sleep"):
+            with self.assertRaises(GDELTRequestError):
+                connector.search(query="blueberry", from_publication_date="2020-01-01", limit=5)
+
     def test_search_gives_up_after_max_retries(self) -> None:
         connector = GDELTConnector()
         with patch(
