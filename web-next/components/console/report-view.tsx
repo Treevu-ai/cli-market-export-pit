@@ -24,6 +24,21 @@ const PRIORITY_CLASSES: Record<string, string> = {
   low: "text-muted-foreground",
 };
 
+// CLI Market returns shelf prices in the target market's own local
+// currency (not converted) -- the symbol must match the market the
+// commerce domain actually queried, not be hardcoded to Peru's sol.
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  PE: "S/",
+  MX: "$",
+  US: "$",
+  CL: "$",
+  CO: "$",
+  AR: "$",
+  BR: "R$",
+  EU: "€",
+  GB: "£",
+};
+
 type Props = {
   report: ReportData;
   fichaAvailable: boolean;
@@ -138,16 +153,18 @@ export function ReportView({ report, fichaAvailable, onGenerateFicha, isExample 
           <h3 className="mb-4 font-display text-lg">{t("report.commerceBenchmarks")}</h3>
           {commerce && commerce.price_max != null ? (
             <>
-              {[
-                { label: t("report.priceMin"), value: commerce.price_min },
-                { label: t("report.priceAvg"), value: commerce.price_avg },
-                { label: t("report.priceMax"), value: commerce.price_max },
-              ].map((row) => (
-                <div key={row.label} className="mb-3 last:mb-0">
-                  <div className="mb-1 flex justify-between text-xs font-semibold">
-                    <span>{row.label}</span>
-                    <span>{row.value != null ? `S/ ${row.value}` : "—"}</span>
-                  </div>
+              {(() => {
+                const currencySymbol = CURRENCY_SYMBOLS[(commerce.target_market || "").toUpperCase()] || "$";
+                return [
+                  { label: t("report.priceMin"), value: commerce.price_min },
+                  { label: t("report.priceAvg"), value: commerce.price_avg },
+                  { label: t("report.priceMax"), value: commerce.price_max },
+                ].map((row) => (
+                  <div key={row.label} className="mb-3 last:mb-0">
+                    <div className="mb-1 flex justify-between text-xs font-semibold">
+                      <span>{row.label}</span>
+                      <span>{row.value != null ? `${currencySymbol} ${row.value}` : "—"}</span>
+                    </div>
                   <div className="h-2.5 w-full overflow-hidden rounded-full bg-foreground/10">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-[#006b58] to-[#64ffda]"
@@ -155,7 +172,8 @@ export function ReportView({ report, fichaAvailable, onGenerateFicha, isExample 
                     />
                   </div>
                 </div>
-              ))}
+                ));
+              })()}
               <p className="mt-3 text-xs text-muted-foreground">
                 {commerce.stores_compared ?? 0} {t("report.storesCompared")} · {commerce.shelf_products_count ?? 0} {t("report.shelfProducts")}.
               </p>
