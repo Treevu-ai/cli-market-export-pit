@@ -3,7 +3,13 @@
 import { useEffect, useState, useRef } from "react";
 import { useLocale } from "@/lib/i18n/locale-context";
 
-const NODE_COUNTS = [5, 3, 3, 4];
+// Real connector count as of 2026-07-30: 18 total across
+// OpenAlex/Crossref/PubMed/SemanticScholar/EPO (ciencia), GDELT/Comtrade/
+// CLIMarket/WITS/USDA FAS/BCRP (mercado), OpenFDA/EFSA-EurLex/FoodData
+// Central (regulatorio), CORDIS/NIH/NSF/Climatiq (I+D y proyectos). Static,
+// not fetched live -- update both this and the "18" below together when a
+// connector is added or removed.
+const NODE_COUNTS = [5, 6, 3, 4];
 
 export function InfrastructureSection() {
   const { t } = useLocale();
@@ -131,7 +137,7 @@ export function InfrastructureSection() {
             
             <div className="relative z-10">
               <div className="flex items-baseline gap-2 mb-4">
-                <span className="text-8xl lg:text-[10rem] font-display leading-none">15</span>
+                <span className="text-8xl lg:text-[10rem] font-display leading-none">18</span>
                 <span className="text-2xl text-muted-foreground">{t("infrastructure.bigStatLabel")}</span>
               </div>
               <p className="text-muted-foreground max-w-md">
@@ -152,7 +158,7 @@ export function InfrastructureSection() {
             <div className={`p-8 border border-foreground/10 bg-foreground/[0.02] transition-all duration-700 delay-200 ${
               isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
             }`}>
-              <span className="text-5xl lg:text-6xl font-display">8</span>
+              <span className="text-5xl lg:text-6xl font-display">9</span>
               <span className="block text-sm text-muted-foreground mt-2">{t("infrastructure.domainsLabel")}</span>
               <span className="block text-xs text-muted-foreground/70 mt-2">{t("infrastructure.domainsList")}</span>
             </div>

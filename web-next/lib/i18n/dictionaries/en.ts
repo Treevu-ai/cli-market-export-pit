@@ -75,13 +75,13 @@ export const en = {
     eyebrow: "Verified sources",
     headline: "Verifiable",
     headlineAccent: "evidence.",
-    lead: "15 verified sources, with cryptographic verification per response. Nothing is lost between the raw data and the final report.",
+    lead: "18 verified sources, with cryptographic verification per response. Nothing is lost between the raw data and the final report.",
     bigStatLabel: "sources",
     bigStatDescription:
-      "Scientific publications, patents, foreign trade, shelf prices, and regulation in a single view.",
+      "Scientific publications, patents, foreign trade, tariffs, shelf prices, and regulation in a single view.",
     checksumLabel: "Verification per source",
     domainsLabel: "Domains evaluated",
-    domainsList: "Science, patents, trends, foreign trade, shelf, regulatory, sustainability, tech scouting",
+    domainsList: "Science, patents, trends, foreign trade, shelf, regulatory, macro, sustainability, tech scouting",
     sourceGroups: [
       { name: "Science", status: "verified" },
       { name: "Market", status: "verified" },

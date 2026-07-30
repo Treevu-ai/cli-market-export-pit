@@ -75,13 +75,13 @@ export const es = {
     eyebrow: "Fuentes verificadas",
     headline: "Evidencia",
     headlineAccent: "verificable.",
-    lead: "15 fuentes verificadas, con verificación criptográfica por respuesta. Nada se pierde entre el dato crudo y el reporte final.",
+    lead: "18 fuentes verificadas, con verificación criptográfica por respuesta. Nada se pierde entre el dato crudo y el reporte final.",
     bigStatLabel: "fuentes",
     bigStatDescription:
-      "Publicaciones científicas, patentes, comercio exterior, precios de góndola y regulación en una misma lectura.",
+      "Publicaciones científicas, patentes, comercio exterior, aranceles, precios de góndola y regulación en una misma lectura.",
     checksumLabel: "Verificación por fuente",
     domainsLabel: "Dominios evaluados",
-    domainsList: "Ciencia, patentes, tendencias, comercio exterior, góndola, regulatorio, sostenibilidad, tech scouting",
+    domainsList: "Ciencia, patentes, tendencias, comercio exterior, góndola, regulatorio, macro, sostenibilidad, tech scouting",
     sourceGroups: [
       { name: "Ciencia", status: "verificado" },
       { name: "Mercado", status: "verificado" },
