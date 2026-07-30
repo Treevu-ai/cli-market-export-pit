@@ -46,6 +46,13 @@ Full audit of PIT's 8 evidence-source connectors and scoring pipeline: 22 comple
 - **CLI Market's shelf-price domain reflects the *target* market, not Peru's domestic market.** For non-LatAm targets (US, EU) CLI Market has little to no relevant grocery-retailer coverage (only a handful of generic lifestyle e-commerce brands), so "Retail/góndola" comes back empty even when the same product has rich real data in Peru's own market. Not a bug — CLI Market's real retail coverage is concentrated in Peru + a few LatAm markets.
 - **The regulatory domain (OpenFDA, EFSA/EUR-Lex, FoodData Central) only covers the US and EU.** All three connectors explicitly skip any other `target_market` (confirmed in code: OpenFDA/FoodDataCentral require `target_market == "US"`, EFSA requires an EU market). Any analysis targeting Mexico, Chile, Colombia, Argentina, Brazil, etc. will always show an empty regulatory panel — there's no real LatAm equivalent to OpenFDA wired in yet (e.g. Mexico's COFEPRIS).
 
+### Fixed — public example report, final iteration
+Went through four query/market combinations for `/v1/public/example-report`, live-testing each against the coverage gaps documented above, before landing on the one that actually exercises every domain:
+- `cacao alto flavanol → EU`: 2 of 9 domains (EU has zero CLI Market retail coverage, Spanish query, self-trade partner bug — this is what surfaced the Comtrade and Climatiq/EPO findings above).
+- `high flavanol cocoa → US`: 7 of 9 (English query fixed EPO; Comtrade fix added trade; but the long qualified phrase still missed Climatiq, and CLI Market's US coverage is thin).
+- `cocoa → MX`: 7 of 9 (short query fixed Climatiq; MX is a real Comtrade partner and has some CLI Market coverage; but MX has no regulatory source at all).
+- **`chia seeds → US` (final): 8 of 9.** `target_market=US` is the only choice that unlocks the regulatory domain (23 real records, OpenFDA + FoodData Central) while a real Peru-US trade lane exists in Comtrade (9 export records, growing) and "chia seeds" is short/English enough for EPO (15 patents) and Climatiq (8 activities) to match. Score 60.5, coverage 0.8, "Validate" — only `macro` (BCRP) missed, from a transient WAF block unrelated to the query. This is likely close to the ceiling for a single example run without a source-level fix to the three coverage gaps above.
+
 ## 2026-07-28
 
 ### Added
