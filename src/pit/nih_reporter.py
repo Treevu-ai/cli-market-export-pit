@@ -42,17 +42,32 @@ class NIHReporterConnector:
     base_url = "https://api.reporter.nih.gov/v2/projects/search"
 
     def search(self, *, query: str, from_publication_date: str, limit: int) -> NIHReporterResponse:
-        params: dict[str, str] = {
-            "query": query,
-            "from_date": from_publication_date,
-            "to_date": "3000-01-01",
-            "limit": str(limit),
-            "format": "json",
+        # NIH RePORTER's v2 API is POST-only with a JSON criteria body --
+        # the previous GET + query-string params returned HTTP 405
+        # (Method Not Allowed) on every call.
+        params: dict[str, Any] = {
+            "criteria": {
+                "advanced_text_search": {
+                    "operator": "and",
+                    "search_field": "all",
+                    "search_text": query,
+                },
+                "project_start_date": {
+                    "from_date": from_publication_date,
+                    "to_date": "3000-01-01",
+                },
+            },
+            "offset": 0,
+            "limit": limit,
         }
-        request_url = f"{self.base_url}?{urlencode(params)}"
+        request_url = self.base_url
         request = Request(
             request_url,
-            headers={"User-Agent": "PIT/0.1 research-service"},
+            data=json.dumps(params).encode("utf-8"),
+            headers={
+                "User-Agent": "PIT/0.1 research-service",
+                "Content-Type": "application/json",
+            },
         )
         try:
             with urlopen(request, timeout=20) as response:

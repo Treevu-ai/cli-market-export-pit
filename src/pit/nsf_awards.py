@@ -39,15 +39,21 @@ class NSFAwardsResponse:
 class NSFAwardsConnector:
     source = "nsf_awards"
     license_name = "NSF Open Data; public domain"
-    base_url = "https://api.nsf.gov/services/v1/awards/search"
+    # NSF's award search API takes the response-format suffix on the path
+    # itself, not a `format` query param -- the previous `/awards/search`
+    # + `format=json` shape doesn't match any real NSF route (HTTP 404).
+    base_url = "https://api.nsf.gov/services/v1/awards.json"
 
     def search(self, *, query: str, from_publication_date: str, limit: int) -> NSFAwardsResponse:
+        # Confirmed live: NSF's API rejects `startDate`/`endDate`/`limit` as
+        # unknown params (AwardAPI-002) -- the real names are `dateStart`/
+        # `dateEnd` (MM/DD/YYYY) and `rpp` (results per page, capped at 25).
+        year, month, day = from_publication_date.split("-")
         params: dict[str, str] = {
             "keyword": query,
-            "startDate": from_publication_date,
-            "endDate": "3000-01-01",
-            "limit": str(limit),
-            "format": "json",
+            "dateStart": f"{month}/{day}/{year}",
+            "dateEnd": "12/31/2099",
+            "rpp": str(min(limit, 25)),
         }
         request_url = f"{self.base_url}?{urlencode(params)}"
         request = Request(
@@ -76,7 +82,9 @@ class NSFAwardsConnector:
 
         try:
             body = json.loads(raw_content)
-            awards = body.get("award", [])
+            # Confirmed live: the real response nests awards under
+            # response.award, not a top-level `award` key.
+            awards = body.get("response", {}).get("award", [])
         except (json.JSONDecodeError, AttributeError, TypeError) as error:
             raise NSFAwardsRequestError(
                 "NSF Awards response did not contain award data",
@@ -96,9 +104,11 @@ class NSFAwardsConnector:
                 "title": title,
                 "start_date": award.get("startDate"),
                 "end_date": award.get("expDate"),
-                "funding_amount": award.get("amount"),
+                # fundsObligatedAmt is the confirmed-live field name;
+                # "amount" doesn't exist on the real response.
+                "funding_amount": award.get("fundsObligatedAmt"),
                 "currency": "USD",
-                "organizations": award.get("investigator", []),
+                "organizations": [n for n in (award.get("awardeeName"), award.get("pdPIName")) if n],
                 "source": "nsf_awards",
             })
 

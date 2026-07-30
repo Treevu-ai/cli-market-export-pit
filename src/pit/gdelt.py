@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -40,6 +41,8 @@ class GDELTConnector:
     source = "gdelt"
     license_name = "GDELT Project; open for non-commercial use"
     base_url = "https://api.gdeltproject.org/api/v2/doc/doc"
+    max_retries = 3
+    retryable_statuses = frozenset({429, 500, 502, 503, 504})
 
     def search(
         self,
@@ -61,29 +64,35 @@ class GDELTConnector:
             "end": "30000101",
         }
         request_url = f"{self.base_url}?{urlencode(params)}"
-        request = Request(
-            request_url,
-            headers={"User-Agent": "PIT/0.1 research-service"},
-        )
-        try:
-            with urlopen(request, timeout=20) as response:
-                raw_content = response.read()
-                http_status = response.status
-        except HTTPError as error:
-            raw_content = error.read()
-            raise GDELTRequestError(
-                f"GDELT returned HTTP {error.code}",
-                http_status=error.code,
-                raw_content=raw_content,
-                request_url=request_url,
-                request_params=params,
-            ) from error
-        except URLError as error:
-            raise GDELTRequestError(
-                f"GDELT network error: {error.reason}",
-                request_url=request_url,
-                request_params=params,
-            ) from error
+        for attempt in range(self.max_retries):
+            request = Request(
+                request_url,
+                headers={"User-Agent": "PIT/0.1 research-service"},
+            )
+            try:
+                with urlopen(request, timeout=20) as response:
+                    raw_content = response.read()
+                    http_status = response.status
+                break
+            except HTTPError as error:
+                raw_content = error.read()
+                last_error = GDELTRequestError(
+                    f"GDELT returned HTTP {error.code}",
+                    http_status=error.code,
+                    raw_content=raw_content,
+                    request_url=request_url,
+                    request_params=params,
+                )
+                if error.code in self.retryable_statuses and attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise last_error from error
+            except URLError as error:
+                raise GDELTRequestError(
+                    f"GDELT network error: {error.reason}",
+                    request_url=request_url,
+                    request_params=params,
+                ) from error
 
         try:
             body = json.loads(raw_content)

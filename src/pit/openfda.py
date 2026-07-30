@@ -57,8 +57,13 @@ class OpenFDAConnector:
                 raw_content=b'{"results":[]}',
                 works=[],
             )
+        # OpenFDA's Lucene-style syntax requires field-scoped terms (a bare
+        # phrase is not a valid query) and report_date literals with no
+        # separators (YYYYMMDD) -- both a bare query and hyphenated ISO
+        # dates were confirmed live to return HTTP 400.
+        date_from = from_publication_date.replace("-", "")
         params: dict[str, str] = {
-            "search": f'{query} AND report_date:[{from_publication_date} TO 30001231]',
+            "search": f'product_description:"{query}" AND report_date:[{date_from} TO 30001231]',
             "limit": str(limit),
         }
         request_url = f"{self.base_url}?{urlencode(params)}"
