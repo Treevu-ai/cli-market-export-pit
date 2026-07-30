@@ -33,6 +33,19 @@ Full audit of PIT's 8 evidence-source connectors and scoring pipeline: 22 comple
 ### Security
 - Closed PR #4 ("technical specs for 17 public API connectors") without merging: it planned to add FAOSTAT (`CC BY-NC-SA 3.0`, non-commercial license, unresolved commercial-use question) and Google Trends via headless-Chrome scraping (the spec itself acknowledged this risks Google's Terms of Service) to a paid commercial product. Deleted the associated branch.
 
+### Added — public example report
+- `/report/` with no `run_id` showed an empty placeholder — there was no unauthenticated way to view any report, since every report route requires a logged-in owner. Added `/v1/public/example-report`, a single hardcoded run_id (not a general auth bypass, so it can never expose a real user's data), and wired the frontend to use it when no `run_id` is given, with a banner making clear it's an example.
+
+### Fixed — more real bugs found while building the example report
+- **Comtrade silently returned zero trade data on every single run.** `reporter_country` defaulted to `"0"` ("World" aggregate); confirmed live this returns zero HS6-level records from the real API. `enrich_with_trade()` never overrode it, so the "trade" domain (0.20 weight, tied for highest) had been contributing nothing to any score since Comtrade was fixed earlier today. Defaulted to Peru (604) — PIT's whole premise is Peru's export potential.
+- **Every one of the 17 connectors could crash the entire pipeline run on a timeout.** `urlopen`'s socket timeout surfaces as a bare `TimeoutError`, not wrapped in `URLError` — every connector's `except` clause only covered `HTTPError`/`URLError`, so a single slow connector could take down a real user's whole research run instead of just failing its own domain. Reproduced live (GDELT). Fixed across all 17 connectors.
+- **Shelf-price comparison showed the wrong currency.** The frontend hardcoded "S/" (Peruvian sol) on every price regardless of which market was actually queried — a Mexico analysis displayed Mexican peso prices labeled as soles. Now maps the symbol from the commerce domain's actual target market.
+
+### Documented — real coverage gaps, not bugs (left as-is)
+- **EPO OPS and Climatiq barely match Spanish or multi-word qualified queries.** Confirmed live: `"cacao alto flavanol"` → 0 EPO patents, but `"high flavanol cocoa"` → 5; `"high flavanol cocoa"` → 0 Climatiq matches, but `"cocoa"` alone → 5. Both APIs want short, simple, English terms — this silently weakens the patent and sustainability domains on any real Spanish-language query, which is most of them.
+- **CLI Market's shelf-price domain reflects the *target* market, not Peru's domestic market.** For non-LatAm targets (US, EU) CLI Market has little to no relevant grocery-retailer coverage (only a handful of generic lifestyle e-commerce brands), so "Retail/góndola" comes back empty even when the same product has rich real data in Peru's own market. Not a bug — CLI Market's real retail coverage is concentrated in Peru + a few LatAm markets.
+- **The regulatory domain (OpenFDA, EFSA/EUR-Lex, FoodData Central) only covers the US and EU.** All three connectors explicitly skip any other `target_market` (confirmed in code: OpenFDA/FoodDataCentral require `target_market == "US"`, EFSA requires an EU market). Any analysis targeting Mexico, Chile, Colombia, Argentina, Brazil, etc. will always show an empty regulatory panel — there's no real LatAm equivalent to OpenFDA wired in yet (e.g. Mexico's COFEPRIS).
+
 ## 2026-07-28
 
 ### Added
