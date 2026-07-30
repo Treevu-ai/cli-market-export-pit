@@ -273,14 +273,16 @@ def _handle_research_error(error: ResearchExecutionError) -> None:
     ) from error
 
 
-# One specific, hardcoded research run (cocoa -> MX, created 2026-07-30
-# against the fully fixed pipeline: Comtrade reporter_country fix, the
-# TimeoutError fix across all 17 connectors, and a query/market combo
-# confirmed live to populate 7 of 9 domains with real data) shown publicly
-# at /report/ with no run_id -- deliberately a single explicit constant,
-# not a general auth bypass, so this can never accidentally expose a real
-# user's run.
-EXAMPLE_REPORT_RUN_ID = "rr_1fe2c7bde4c84fd58cf95cd5bdb3366c"
+# One specific, hardcoded research run (chia seeds -> US, created
+# 2026-07-30) shown publicly at /report/ with no run_id -- deliberately a
+# single explicit constant, not a general auth bypass, so this can never
+# accidentally expose a real user's run. This query/market combo is the
+# richest found: 8 of 9 domains with real data (only macro/BCRP missed
+# this run due to a transient WAF block on BCRP's side, unrelated to the
+# query) -- target_market=US unlocks OpenFDA + FoodData Central
+# (regulatory only covers US/EU), Comtrade has a real Peru-US trade lane,
+# and "chia seeds" is short/English enough to match EPO and Climatiq well.
+EXAMPLE_REPORT_RUN_ID = "rr_a4355ae710b54ea89f9d17060e1bbcd7"
 
 
 def _check_run_ownership(run: dict[str, Any], user: dict[str, Any]) -> None:
