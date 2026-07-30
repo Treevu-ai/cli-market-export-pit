@@ -50,6 +50,8 @@ from .research import ResearchExecutionError, ResearchService
 from .scoring import ScoringService
 from .semanticscholar import SemanticScholarConnector
 from .storage import ResearchStore
+from .usda_fas import USDAFASConnector
+from .wits import WITSConnector
 
 logger = logging.getLogger("pit")
 
@@ -162,6 +164,8 @@ def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerato
         ClimatiqConnector(api_key=os.getenv("CLIMATIQ_API_KEY")),
         CLIMarketConnector(),
         BCRPConnector(),
+        WITSConnector(),
+        USDAFASConnector(api_key=os.getenv("USDA_API_KEY")),
     )
     return service, ScoringService(store), ReportGenerator()
 

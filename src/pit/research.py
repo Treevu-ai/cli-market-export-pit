@@ -25,6 +25,8 @@ from .openfda import OpenFDAConnector, OpenFDARequestError
 from .pubmed import PubMedConnector, PubMedRequestError
 from .semanticscholar import SemanticScholarConnector, SemanticScholarRequestError
 from .storage import ResearchStore
+from .usda_fas import USDAFASConnector, USDAFASRequestError
+from .wits import WITSConnector, WITSRequestError
 from .taxonomy import (
     ensure_default_taxonomy,
     expand_query_with_synonyms,
@@ -103,6 +105,8 @@ class ResearchService:
         climatiq_connector: ClimatiqConnector | None = None,
         commerce_connector: CLIMarketConnector | None = None,
         bcrp_connector: BCRPConnector | None = None,
+        wits_connector: WITSConnector | None = None,
+        usda_fas_connector: USDAFASConnector | None = None,
     ) -> None:
         self.store = store
         self.science_connector = science_connector
@@ -121,6 +125,8 @@ class ResearchService:
         self.climatiq_connector = climatiq_connector
         self.commerce_connector = commerce_connector
         self.bcrp_connector = bcrp_connector
+        self.wits_connector = wits_connector
+        self.usda_fas_connector = usda_fas_connector
 
     def run_science_research(
         self,
@@ -696,7 +702,7 @@ class ResearchService:
             )
             for work in response.works:
                 self._store_trade_work(run_id=run_id, request_id=request_id, work=work)
-            self._save_trade_summary(run_id=run_id, works=response.works)
+            all_trade_works = list(response.works)
         except ComtradeRequestError as error:
             if request_id is None:
                 request_params = error.request_params or {"query": run["query_normalized"]}
@@ -715,6 +721,82 @@ class ResearchService:
                 raw_content=error.raw_content,
             )
             raise ResearchExecutionError(run_id, str(error)) from error
+
+        # WITS (tariff barriers) and USDA FAS (global supply context) share
+        # the "trade" domain with Comtrade rather than getting their own
+        # scoring weight -- see the July 2026 connector audit note on
+        # ScoringEngine.weights: adding a domain that isn't wired into
+        # estimate_coverage/estimate_score just silently drops it from
+        # every score, so new trade-adjacent sources fold into the existing
+        # weighted domain instead.
+        if self.wits_connector is not None:
+            try:
+                wits_response = self.wits_connector.search(target_market=target_market, hs_code=resolved_hs)
+                wits_request_id = self.store.start_source_request(
+                    research_run_id=run_id,
+                    source=self.wits_connector.source,
+                    request_url=wits_response.request_url,
+                    request_params=wits_response.request_params,
+                    license_name=self.wits_connector.license_name,
+                )
+                self.store.finish_source_request(
+                    request_id=wits_request_id,
+                    http_status=wits_response.http_status,
+                    raw_content=wits_response.raw_content,
+                )
+                for work in wits_response.works:
+                    self._store_wits_work(run_id=run_id, request_id=wits_request_id, work=work)
+                all_trade_works.extend(wits_response.works)
+            except WITSRequestError as error:
+                wits_request_id = self.store.start_source_request(
+                    research_run_id=run_id,
+                    source=self.wits_connector.source,
+                    request_url=error.request_url or self.wits_connector.base_url,
+                    request_params=error.request_params or {},
+                    license_name=self.wits_connector.license_name,
+                )
+                self.store.fail_source_request(
+                    request_id=wits_request_id,
+                    http_status=error.http_status,
+                    error=str(error),
+                    raw_content=error.raw_content,
+                )
+
+        if self.usda_fas_connector is not None:
+            try:
+                market_year = str(run.get("cutoff_at") or "")[:4] or "2024"
+                usda_response = self.usda_fas_connector.search(query=query, market_year=market_year)
+                usda_request_id = self.store.start_source_request(
+                    research_run_id=run_id,
+                    source=self.usda_fas_connector.source,
+                    request_url=usda_response.request_url,
+                    request_params=usda_response.request_params,
+                    license_name=self.usda_fas_connector.license_name,
+                )
+                self.store.finish_source_request(
+                    request_id=usda_request_id,
+                    http_status=usda_response.http_status,
+                    raw_content=usda_response.raw_content,
+                )
+                for work in usda_response.works:
+                    self._store_usda_fas_work(run_id=run_id, request_id=usda_request_id, work=work)
+                all_trade_works.extend(usda_response.works)
+            except USDAFASRequestError as error:
+                usda_request_id = self.store.start_source_request(
+                    research_run_id=run_id,
+                    source=self.usda_fas_connector.source,
+                    request_url=error.request_url or self.usda_fas_connector.base_url,
+                    request_params=error.request_params or {},
+                    license_name=self.usda_fas_connector.license_name,
+                )
+                self.store.fail_source_request(
+                    request_id=usda_request_id,
+                    http_status=error.http_status,
+                    error=str(error),
+                    raw_content=error.raw_content,
+                )
+
+        self._save_trade_summary(run_id=run_id, works=all_trade_works)
         return self.store.get_run_detail(run_id)
 
     def _store_trend_work(self, *, run_id: str, request_id: str, work: dict[str, Any]) -> None:
@@ -771,6 +853,45 @@ class ResearchService:
             geography=partner,
             payload=normalized,
             dedupe_key=external_id.strip().casefold(),
+        )
+
+    def _store_wits_work(self, *, run_id: str, request_id: str, work: dict[str, Any]) -> None:
+        year = str(work.get("year") or "").strip()
+        hs_code = str(work.get("hs_code") or "").strip()
+        if not year or not hs_code:
+            return
+        external_id = f"{work.get('reporter', '')}-{work.get('partner', '')}-{hs_code}-{year}"
+        self.store.add_evidence(
+            research_run_id=run_id,
+            source_request_id=request_id,
+            source="wits",
+            domain="trade",
+            external_id=external_id,
+            title=f"Tariff: HS {hs_code} into {work.get('reporter', '')} from Peru ({year})",
+            published_at=f"{year}-01-01",
+            geography=work.get("reporter"),
+            payload=work,
+            dedupe_key=f"wits:{external_id}".strip().casefold(),
+        )
+
+    def _store_usda_fas_work(self, *, run_id: str, request_id: str, work: dict[str, Any]) -> None:
+        commodity_code = str(work.get("commodity_code") or "").strip()
+        attribute = str(work.get("attribute") or "").strip()
+        market_year = str(work.get("market_year") or "").strip()
+        if not commodity_code or not attribute or not market_year:
+            return
+        external_id = f"{commodity_code}-{attribute}-{market_year}"
+        self.store.add_evidence(
+            research_run_id=run_id,
+            source_request_id=request_id,
+            source="usda_fas",
+            domain="trade",
+            external_id=external_id,
+            title=f"USDA PSD {attribute}: commodity {commodity_code} ({market_year})",
+            published_at=f"{market_year}-01-01",
+            geography="world",
+            payload=work,
+            dedupe_key=f"usda_fas:{external_id}".strip().casefold(),
         )
 
     def _save_trend_summary(self, *, run_id: str, works: list[dict[str, Any]]) -> None:
