@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import unittest
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
 
-from pit.openfda import OpenFDAConnector
+from pit.openfda import OpenFDAConnector, OpenFDARequestError
 
 
 def _fake_response(body: bytes, status: int = 200):
@@ -44,6 +45,48 @@ class OpenFDAQueryConstructionTests(unittest.TestCase):
 
         mocked_urlopen.assert_not_called()
         self.assertEqual(result.works, [])
+
+
+class OpenFDANoMatchesTests(unittest.TestCase):
+    """Regression: OpenFDA returns HTTP 404 with {"error":{"code":"NOT_FOUND"}}
+    when a query genuinely has zero matching recalls -- confirmed live via
+    curl for a real product query. This used to raise OpenFDARequestError and
+    take down the whole regulatory pipeline step for what is actually the
+    normal case (most food products have no recalls)."""
+
+    def test_search_treats_404_not_found_as_empty_results(self) -> None:
+        connector = OpenFDAConnector()
+        not_found = HTTPError(
+            url="https://api.fda.gov/food/enforcement.json",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=None,
+        )
+        not_found.read = lambda: b'{"error":{"code":"NOT_FOUND","message":"No matches found!"}}'
+        with patch("pit.openfda.urlopen", side_effect=not_found):
+            result = connector.search(
+                query="camu camu pulpa congelada", from_publication_date="2022-01-01", limit=5, target_market="US"
+            )
+
+        self.assertEqual(result.http_status, 200)
+        self.assertEqual(result.works, [])
+
+    def test_search_raises_on_other_404_bodies(self) -> None:
+        connector = OpenFDAConnector()
+        not_found = HTTPError(
+            url="https://api.fda.gov/food/enforcement.json",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=None,
+        )
+        not_found.read = lambda: b"<html>gateway 404</html>"
+        with patch("pit.openfda.urlopen", side_effect=not_found):
+            with self.assertRaises(OpenFDARequestError):
+                connector.search(
+                    query="camu camu pulpa congelada", from_publication_date="2022-01-01", limit=5, target_market="US"
+                )
 
 
 if __name__ == "__main__":

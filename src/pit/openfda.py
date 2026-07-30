@@ -77,6 +77,20 @@ class OpenFDAConnector:
                 http_status = response.status
         except HTTPError as error:
             raw_content = error.read()
+            # Confirmed live: OpenFDA returns HTTP 404 with
+            # {"error":{"code":"NOT_FOUND",...}} when a query genuinely has
+            # zero matching recalls -- the normal case for most food
+            # products, not a request failure. Every other domain in this
+            # pipeline returns an empty works list for no matches instead of
+            # raising.
+            if error.code == 404 and b'"NOT_FOUND"' in raw_content:
+                return OpenFDAResponse(
+                    request_url=request_url,
+                    request_params=params,
+                    http_status=200,
+                    raw_content=raw_content,
+                    works=[],
+                )
             raise OpenFDARequestError(
                 f"OpenFDA returned HTTP {error.code}",
                 http_status=error.code,

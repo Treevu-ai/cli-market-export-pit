@@ -26,6 +26,8 @@ def estimate_coverage(domain: str, payloads: dict[str, Any]) -> float:
         return 0.7 if payloads.get("climatiq_aggregation") else 0.0
     if domain == "technology_scout":
         return 0.7 if payloads.get("techscout_aggregation") else 0.0
+    if domain == "macro":
+        return 0.6 if payloads.get("bcrp_aggregation") else 0.0
     return 0.0
 
 
@@ -65,17 +67,31 @@ def estimate_score(domain: str, payloads: dict[str, Any]) -> int:
         agg = payloads.get("techscout_aggregation", {})
         count = agg.get("total_projects", 0)
         return min(100, max(0, count * 10))
+    if domain == "macro":
+        agg = payloads.get("bcrp_aggregation", {})
+        count = agg.get("periods_count", 0)
+        return min(100, max(0, count * 8))
     return 0
 
 
 class ScoringEngine:
     score_version = "v1.0-mvp"
+    # Rebalanced from the original 5-domain set (science/patent/trend/trade/
+    # commerce summed to 1.0) to fold in 4 domains that were being collected
+    # and stored as real evidence but never scored (see the July 2026 pitchavi
+    # connector audit): regulatory, sustainability, technology_scout, macro.
+    # Science and trade stay the two largest single signals; the newly-added
+    # domains are secondary/auxiliary rather than primary GO/NO-GO drivers.
     weights: ClassVar[dict[str, float]] = {
-        "science": 0.25,
-        "patent": 0.15,
-        "trend": 0.15,
-        "trade": 0.25,
-        "commerce": 0.20,
+        "science": 0.20,
+        "patent": 0.10,
+        "trend": 0.10,
+        "trade": 0.20,
+        "commerce": 0.15,
+        "regulatory": 0.10,
+        "macro": 0.05,
+        "sustainability": 0.05,
+        "technology_scout": 0.05,
     }
     coverage_threshold = 0.60
 
