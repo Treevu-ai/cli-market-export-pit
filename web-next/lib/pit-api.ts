@@ -155,6 +155,13 @@ export async function fetchReport(runId: string): Promise<ReportData> {
   return envelope.data;
 }
 
+// No auth required -- always the same hardcoded demo run (cacao alto
+// flavanol -> EU), shown at /report/ when no run_id is given.
+export async function fetchExampleReport(): Promise<ReportData> {
+  const envelope = await pitRequest<{ data: ReportData }>("/v1/public/example-report");
+  return envelope.data;
+}
+
 export interface AgentsStatus {
   ficha_available?: boolean;
   reason?: string;

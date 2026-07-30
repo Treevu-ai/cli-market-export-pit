@@ -28,9 +28,10 @@ type Props = {
   report: ReportData;
   fichaAvailable: boolean;
   onGenerateFicha: (segment: string, stage: string) => Promise<string | null>;
+  isExample?: boolean;
 };
 
-export function ReportView({ report, fichaAvailable, onGenerateFicha }: Props) {
+export function ReportView({ report, fichaAvailable, onGenerateFicha, isExample = false }: Props) {
   const { t } = useLocale();
   const [showJson, setShowJson] = useState(false);
   const [fichaMarkdown, setFichaMarkdown] = useState("");
@@ -205,7 +206,9 @@ export function ReportView({ report, fichaAvailable, onGenerateFicha }: Props) {
         </div>
       </section>
 
-      {/* Ficha */}
+      {/* Ficha -- hidden on the public example: generation hits an
+          authenticated route and would just 401 for a signed-out viewer. */}
+      {!isExample && (
       <section className="space-y-4 border border-foreground/10 p-6">
         <h3 className="font-display text-lg">{t("report.fichaTitle")}</h3>
         <div className="flex flex-wrap gap-4">
@@ -259,6 +262,7 @@ export function ReportView({ report, fichaAvailable, onGenerateFicha }: Props) {
           </button>
         )}
       </section>
+      )}
 
       {/* Actions */}
       <section className="flex flex-wrap gap-3 border-t border-foreground/10 pt-6">
@@ -268,14 +272,16 @@ export function ReportView({ report, fichaAvailable, onGenerateFicha }: Props) {
         >
           {showJson ? t("report.hideJson") : t("report.showJson")}
         </button>
-        <a
-          href={reportPdfUrl(report.run_id)}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-full bg-[#64ffda] px-5 py-2 text-sm font-medium text-[#0a192f]"
-        >
-          {t("report.downloadPdf")}
-        </a>
+        {!isExample && (
+          <a
+            href={reportPdfUrl(report.run_id)}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full bg-[#64ffda] px-5 py-2 text-sm font-medium text-[#0a192f]"
+          >
+            {t("report.downloadPdf")}
+          </a>
+        )}
       </section>
       {showJson && (
         <pre className="max-h-96 overflow-auto whitespace-pre-wrap border border-foreground/10 bg-foreground/[0.02] p-4 font-mono text-xs text-muted-foreground">

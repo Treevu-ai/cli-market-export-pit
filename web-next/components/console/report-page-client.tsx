@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { fetchAgentsStatus, fetchReport, generateFicha, type ReportData } from "@/lib/pit-api";
+import { fetchAgentsStatus, fetchExampleReport, fetchReport, generateFicha, type ReportData } from "@/lib/pit-api";
 import { ReportView } from "./report-view";
 import { useLocale } from "@/lib/i18n/locale-context";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -16,6 +16,7 @@ export function ReportPageClient() {
   const [report, setReport] = useState<ReportData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fichaAvailable, setFichaAvailable] = useState(false);
+  const [isExample, setIsExample] = useState(false);
 
   useEffect(() => {
     fetchAgentsStatus()
@@ -24,8 +25,15 @@ export function ReportPageClient() {
   }, []);
 
   useEffect(() => {
-    if (!runId) return;
-    fetchReport(runId)
+    if (runId) {
+      setIsExample(false);
+      fetchReport(runId)
+        .then(setReport)
+        .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      return;
+    }
+    setIsExample(true);
+    fetchExampleReport()
       .then(setReport)
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, [runId]);
@@ -55,16 +63,26 @@ export function ReportPageClient() {
       </header>
 
       <div className="mx-auto max-w-[1000px] px-6 py-10 lg:px-12">
-        {!runId && (
-          <div className="border border-dashed border-foreground/15 p-16 text-center text-muted-foreground">
-            <p className="font-medium">{t("console.noRunId")}</p>
-            <p className="mt-1 text-sm">
-              {t("console.noRunIdDetail")}
-            </p>
+        {isExample && report && (
+          <div className="mb-8 flex items-center gap-3 border border-[#64ffda]/25 bg-[#64ffda]/[0.06] px-5 py-3 text-sm">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-[#64ffda]" />
+            <span className="text-foreground">
+              {t("console.exampleReportBanner")}{" "}
+              <a href="/analyze/" className="underline underline-offset-2 hover:text-[#64ffda]">
+                {t("console.exampleReportCta")}
+              </a>
+            </span>
           </div>
         )}
         {error && <div className="border border-[#e11d48]/30 bg-[#e11d48]/10 p-4 text-sm text-[#e11d48]">{error}</div>}
-        {report && <ReportView report={report} fichaAvailable={fichaAvailable} onGenerateFicha={handleGenerateFicha} />}
+        {report && (
+          <ReportView
+            report={report}
+            fichaAvailable={fichaAvailable && !isExample}
+            onGenerateFicha={handleGenerateFicha}
+            isExample={isExample}
+          />
+        )}
       </div>
     </div>
   );

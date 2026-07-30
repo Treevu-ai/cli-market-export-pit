@@ -298,6 +298,8 @@ export const es = {
     noResultsDetail: "Ejecuta un análisis completo para ver el puntaje, los dominios y la evidencia trazable.",
     noRunId: "Falta el identificador del análisis.",
     noRunIdDetail: "Abre este reporte desde la consola o generá un análisis nuevo.",
+    exampleReportBanner: "Estás viendo un reporte de ejemplo (cacao alto flavanol → UE) generado con el motor real de PIT.",
+    exampleReportCta: "Correr tu propio análisis →",
     backToConsole: "◂ Consola",
   },
   report: {
