@@ -7,6 +7,7 @@ import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -42,8 +43,13 @@ class EPOOPSResponse:
 class EPOOPSConnector:
     source = "epo_ops"
     license_name = "EPO OPS; free tier with registration"
-    base_url = "https://ops.epo.org/3.2/rest-services/search"
-    token_url = "https://oauth.epo.org/oauth2/token"
+    # Confirmed live: bare /3.2/rest-services/search 404s -- the real
+    # published-data search endpoint has a /published-data/ path segment.
+    base_url = "https://ops.epo.org/3.2/rest-services/published-data/search"
+    # oauth.epo.org has no DNS record anymore (confirmed live: NXDOMAIN even
+    # via 8.8.8.8) -- EPO's Apigee gateway serves the token endpoint from
+    # the same host as the API itself, not a separate oauth subdomain.
+    token_url = "https://ops.epo.org/3.2/auth/accesstoken"
     # EPO tokens are typically valid ~20min (1200s); used only if the OAuth
     # response omits expires_in. The safety margin refreshes a bit early so a
     # request never starts with a token that expires mid-flight.
@@ -130,12 +136,19 @@ class EPOOPSConnector:
         from_publication_date: str,
         limit: int,
     ) -> EPOOPSResponse:
-        params: dict[str, str] = {
-            "q": query,
-            "range": f"{from_publication_date[:4]}-3000",
-            "rows": str(limit),
-            "format": "json",
-        }
+        # Confirmed live: range/rows/format are not real query params for
+        # this endpoint (400 CLIENT.InvalidQuery) -- date filtering is CQL
+        # embedded in `q` itself, and pagination is the X-OPS-Range header,
+        # not a query param.
+        # Confirmed live: quoting the search term (txt="blueberry") causes a
+        # genuine EPO-side 500 (SERVER.DomainAccess), reproduced with plain
+        # curl -- unquoted terms work. An open-ended upper bound like
+        # "30001231" also 500s -- EPO's date parser rejects far-future
+        # years; cap it a few years out instead.
+        from_compact = from_publication_date.replace("-", "")
+        to_compact = f"{date.today().year + 5}1231"
+        cql_query = f'txt={query} and pd within "{from_compact}-{to_compact}"'
+        params: dict[str, str] = {"q": cql_query}
         request_url = f"{self.base_url}?{urlencode(params)}"
 
         # A cached token can be stale even before our own TTL elapses (e.g.
@@ -148,6 +161,7 @@ class EPOOPSConnector:
                 headers={
                     "Authorization": f"Bearer {access_token}",
                     "Accept": "application/json",
+                    "X-OPS-Range": f"1-{limit}",
                 },
             )
             try:
@@ -159,6 +173,20 @@ class EPOOPSConnector:
                 if error.code == 401 and attempt == 0:
                     continue
                 raw_content = error.read()
+                # EPO reports a genuinely empty result set as HTTP 404 with
+                # code SERVER.EntityNotFound -- confirmed live for a
+                # non-English query with no matching patents. That's a
+                # real, valid "zero patents found" answer, not a request
+                # failure; every other domain in this pipeline returns an
+                # empty works list for no matches instead of raising.
+                if error.code == 404 and b"EntityNotFound" in raw_content:
+                    return EPOOPSResponse(
+                        request_url=request_url,
+                        request_params=params,
+                        http_status=200,
+                        raw_content=raw_content,
+                        works=[],
+                    )
                 raise EPOOPSRequestError(
                     f"EPO OPS returned HTTP {error.code}",
                     http_status=error.code,
@@ -175,7 +203,18 @@ class EPOOPSConnector:
 
         try:
             body = json.loads(raw_content)
-            results = body.get("ops:searchResult", {}).get("ops:result", [])
+            # Confirmed live: the real response nests results under
+            # ops:world-patent-data.ops:biblio-search.ops:search-result.
+            # ops:publication-reference -- ops:searchResult/ops:result (camelCase)
+            # never existed on the real API.
+            search_result = (
+                body.get("ops:world-patent-data", {})
+                .get("ops:biblio-search", {})
+                .get("ops:search-result", {})
+            )
+            results = search_result.get("ops:publication-reference", [])
+            if isinstance(results, dict):
+                results = [results]
         except (json.JSONDecodeError, AttributeError, TypeError) as error:
             raise EPOOPSRequestError(
                 "EPO OPS response did not contain search results",
@@ -201,38 +240,25 @@ class EPOOPSConnector:
 
 
 def _normalize_patent(item: dict[str, Any]) -> dict[str, Any] | None:
-    pub_ref = item.get("ops:publicationReference", {})
-    app_ref = item.get("ops:applicationReference", {})
-    title = item.get("ops:title", "")
-    if not title:
+    # This is a lightweight publication-reference hit from the /search
+    # endpoint -- confirmed live it carries no title/applicant/IPC data at
+    # all (that requires a separate per-patent /biblio detail call, out of
+    # scope here). Surface what's actually available (family id + the
+    # document-id triplet) instead of silently dropping every result via a
+    # title check that can never pass against this endpoint's real shape.
+    document_id = item.get("document-id", {})
+    country = document_id.get("country", {}).get("$", "")
+    doc_number = document_id.get("doc-number", {}).get("$", "")
+    kind = document_id.get("kind", {}).get("$", "")
+    if not doc_number:
         return None
-    patent_number = pub_ref.get("dc:identifier", "")
-    if not patent_number:
-        patent_number = app_ref.get("dc:identifier", "")
-    applicants = item.get("ops:applicants", {}).get("ops:applicant", [])
-    if isinstance(applicants, dict):
-        applicants = [applicants]
-    assignees = []
-    for applicant in applicants:
-        name = applicant.get("ops:name", "")
-        if name:
-            assignees.append(name)
-    classifications = item.get("ops:classifications", {}).get("ops:classification", [])
-    if isinstance(classifications, dict):
-        classifications = [classifications]
-    ipc_codes = []
-    for cls in classifications:
-        code = cls.get("ops:classificationSymbol", "")
-        if code:
-            ipc_codes.append(code)
-    pub_date = pub_ref.get("ops:date", "")
-    if not pub_date:
-        pub_date = app_ref.get("ops:date", "")
+    patent_number = f"{country}{doc_number}{kind}"
     return {
         "patent_number": patent_number,
-        "title": title,
-        "assignees": assignees,
-        "ipc_codes": ipc_codes,
-        "publication_date": pub_date,
+        "title": "",
+        "assignees": [],
+        "ipc_codes": [],
+        "publication_date": "",
+        "family_id": item.get("@family-id", ""),
         "source": "epo_ops",
     }

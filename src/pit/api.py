@@ -152,7 +152,7 @@ def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerato
         SemanticScholarConnector(),
         patent_connector,
         GDELTConnector(),
-        ComtradeConnector(),
+        ComtradeConnector(subscription_key=os.getenv("COMTRADE_SUBSCRIPTION_KEY")),
         CORDISConnector(),
         NIHReporterConnector(),
         NSFAwardsConnector(),

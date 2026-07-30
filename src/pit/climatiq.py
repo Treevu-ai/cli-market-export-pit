@@ -39,7 +39,10 @@ class ClimatiqResponse:
 class ClimatiqConnector:
     source = "climatiq"
     license_name = "Climatiq; commercial with attribution"
-    base_url = "https://api.climatiq.io/v2/search"
+    # Confirmed live: /v2/search doesn't exist (404, key was never the
+    # problem -- it was already valid). The real search endpoint is
+    # /data/v1/search and requires a data_version param.
+    base_url = "https://api.climatiq.io/data/v1/search"
 
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key
@@ -47,7 +50,8 @@ class ClimatiqConnector:
     def search(self, *, query: str, from_publication_date: str, limit: int) -> ClimatiqResponse:
         params: dict[str, str] = {
             "query": query,
-            "limit": str(limit),
+            "results_per_page": str(limit),
+            "data_version": "^6",
         }
         request_url = f"{self.base_url}?{urlencode(params)}"
         headers = {"User-Agent": "PIT/0.1 research-service"}
@@ -79,7 +83,8 @@ class ClimatiqConnector:
 
         try:
             body = json.loads(raw_content)
-            results = body.get("data", [])
+            # Real response is paginated under `results`, not `data`.
+            results = body.get("results", [])
         except (json.JSONDecodeError, AttributeError, TypeError) as error:
             raise ClimatiqRequestError(
                 "Climatiq response did not contain data",
@@ -92,11 +97,12 @@ class ClimatiqConnector:
         works: list[dict[str, Any]] = []
         for item in results:
             works.append({
-                "activity_id": item.get("id"),
+                "activity_id": item.get("activity_id") or item.get("id"),
                 "name": item.get("name"),
                 "category": item.get("category"),
                 "unit": item.get("unit"),
-                "co2e_factor": item.get("co2e_factor"),
+                # Real field name is `factor`, not `co2e_factor`.
+                "co2e_factor": item.get("factor"),
                 "source": "climatiq",
             })
 

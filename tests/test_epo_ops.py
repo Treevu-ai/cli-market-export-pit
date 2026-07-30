@@ -28,7 +28,13 @@ class FakeClock:
 
 
 TOKEN_BODY = b'{"access_token":"token-1","expires_in":"1199"}'
-SEARCH_BODY = b'{"ops:searchResult":{"ops:result":[]}}'
+# Real shape confirmed live -- ops:searchResult/ops:result (camelCase)
+# never existed on the actual API.
+SEARCH_BODY = (
+    b'{"ops:world-patent-data":{"ops:biblio-search":{"ops:search-result":'
+    b'{"ops:publication-reference":[{"@family-id":"123","document-id":'
+    b'{"country":{"$":"EP"},"doc-number":{"$":"4781832"},"kind":{"$":"A1"}}}]}}}}'
+)
 
 
 class EPOOPSTokenExpiryTests(unittest.TestCase):
@@ -114,6 +120,51 @@ class EPOOPSTokenExpiryTests(unittest.TestCase):
             connector._get_access_token()
             with self.assertRaises(EPOOPSRequestError):
                 connector.search(query="cocoa", from_publication_date="2021-01-01", limit=10)
+
+
+class EPOOPSSearchRequestConstructionTests(unittest.TestCase):
+    """Regression: base_url was /3.2/rest-services/search (404 -- the real
+    published-data search path has an extra /published-data/ segment),
+    range/rows/format were never real query params (400
+    CLIENT.InvalidQuery -- pagination is the X-OPS-Range header and date
+    filtering is CQL embedded in `q`), and quoting the search term
+    (txt="x") or an open-ended date bound (...-30001231) both caused a
+    genuine EPO-side 500 -- all confirmed live with a real subscription."""
+
+    def test_search_builds_correct_path_cql_query_and_range_header(self) -> None:
+        clock = FakeClock()
+        connector = EPOOPSConnector("key", "secret", time_func=clock)
+        with patch(
+            "pit.epo_ops.urlopen",
+            side_effect=[_fake_response(TOKEN_BODY), _fake_response(SEARCH_BODY)],
+        ) as mocked_urlopen:
+            connector.search(query="blueberry", from_publication_date="2020-01-01", limit=5)
+
+        search_request = mocked_urlopen.call_args_list[1][0][0]
+        self.assertTrue(
+            search_request.full_url.startswith(
+                "https://ops.epo.org/3.2/rest-services/published-data/search?"
+            )
+        )
+        # Unquoted term -- quoting it is what caused the live 500.
+        self.assertIn("txt%3Dblueberry", search_request.full_url)
+        self.assertIn("pd+within", search_request.full_url.replace("%20", "+"))
+        self.assertNotIn("range=", search_request.full_url)
+        self.assertNotIn("rows=", search_request.full_url)
+        self.assertEqual(search_request.get_header("X-ops-range"), "1-5")
+
+    def test_search_parses_publication_reference_without_requiring_title(self) -> None:
+        clock = FakeClock()
+        connector = EPOOPSConnector("key", "secret", time_func=clock)
+        with patch(
+            "pit.epo_ops.urlopen",
+            side_effect=[_fake_response(TOKEN_BODY), _fake_response(SEARCH_BODY)],
+        ):
+            result = connector.search(query="blueberry", from_publication_date="2020-01-01", limit=5)
+
+        self.assertEqual(len(result.works), 1)
+        self.assertEqual(result.works[0]["patent_number"], "EP4781832A1")
+        self.assertEqual(result.works[0]["family_id"], "123")
 
 
 if __name__ == "__main__":
