@@ -1,39 +1,42 @@
 # Canvas files — instalacion local
 
-Los canvas de Cursor **no viven en el repo git** por defecto. Deben copiarse a la carpeta de proyectos de Cursor en tu maquina.
+Los canvas de Cursor viven en `.cursor/projects/<workspace>/canvases/`, no en el repo git. Usa el script de instalacion para copiarlos automaticamente.
 
-## Windows
+## Instalacion automatica
 
-1. Abre esta carpeta en el Explorador de archivos:
+### Linux / Mac / Cloud Agent
 
-   ```
-   %USERPROFILE%\.cursor\projects\
-   ```
+Desde la raiz del repo:
 
-2. Busca la subcarpeta de tu workspace (nombre codificado del repo, p. ej. contiene `cli-market-export-pit`).
+```bash
+bash scripts/install-canvases.sh
+```
 
-3. Crea la carpeta `canvases` si no existe:
+### Windows (PowerShell)
 
-   ```
-   %USERPROFILE%\.cursor\projects\<tu-workspace>\canvases\
-   ```
+Desde la raiz del repo:
 
-4. Copia estos dos archivos desde `canvases/` del repo:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install-canvases.ps1
+```
 
-   - `lucuma-granola-us-opportunity.canvas.tsx`
-   - `golden-lucuma-crunch-bom.canvas.tsx`
+Luego en Cursor: **Developer → Reload Window**.
 
-5. En Cursor: **Developer → Reload Window**
+## Instalacion manual (Windows)
 
-6. Abre el canvas desde el chat (enlace al `.canvas.tsx`) o desde el explorador de archivos de Cursor.
+1. Abre `%USERPROFILE%\.cursor\projects\`
+2. Busca la carpeta de tu workspace (contiene `cli-market-export-pit`)
+3. Crea `canvases\` si no existe
+4. Copia los dos `.canvas.tsx` de esta carpeta
+5. **Developer → Reload Window**
 
 ## Archivos
 
 | Canvas | Contenido |
 |--------|-----------|
-| `lucuma-granola-us-opportunity.canvas.tsx` | Ficha de oportunidad CONDITIONAL GO |
+| `lucuma-granola-us-opportunity.canvas.tsx` | Ficha CONDITIONAL GO — lucuma granola EE.UU. |
 | `golden-lucuma-crunch-bom.canvas.tsx` | Formulacion y BOM Golden Lucuma Crunch |
 
 ## Nota
 
-Si el enlace del chat apunta a `/home/ubuntu/.cursor/...` es una ruta del agente cloud y **no funcionara en Windows**. Usa los archivos copiados localmente.
+Enlaces del chat que apuntan a `/home/ubuntu/.cursor/...` son rutas del agente cloud y no funcionan en Windows. Tras ejecutar el script, abre los canvas desde tu carpeta local de proyectos.
