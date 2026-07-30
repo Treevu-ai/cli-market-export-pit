@@ -142,6 +142,10 @@ Documentación completa: `pit_agents/product_intelligence/README.md` · Spec: `p
 
 Los zips históricos v1/v2 están en `assets/archives/`.
 
+## Conectores planificados
+
+Especificaciones técnicas para 17 fuentes públicas adicionales (aranceles, barreras SPS/TBT, oferta global, alertas alimentarias, macro, tendencias): `docs/connectors/README.md`.
+
 ## Repo
 
 https://github.com/Treevu-ai/cli-market-export-pit
