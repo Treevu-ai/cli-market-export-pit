@@ -107,12 +107,12 @@ export const es = {
   },
   metrics: {
     tag: "CASO REAL",
-    tagDetail: "arándano orgánico → US",
+    tagDetail: "cacao alto flavanol → EU",
     headline: "De la hipótesis",
     headlineAccent: "a la evidencia.",
     items: [
-      { label: "Hallazgos científicos", sublabel: "caso arándano orgánico → US" },
-      { label: "Referencias comerciales", sublabel: "mismo caso" },
+      { label: "Hallazgos científicos", sublabel: "caso cacao alto flavanol → EU" },
+      { label: "Tiendas comparadas", sublabel: "mismo caso" },
       { label: "Productos de góndola comparados", sublabel: "mercado PE, CLI Market" },
     ],
     tickerExtra: "+11 fuentes más",
@@ -213,7 +213,7 @@ export const es = {
   cta: {
     headline: "Desarrolla primero",
     headlineLine2: "la evidencia.",
-    lead: "Lanza un análisis completo en minutos y decide con datos — el mismo motor que ya corrió el caso arándano arriba.",
+    lead: "Lanza un análisis completo en minutos y decide con datos — el mismo motor que ya corrió el caso cacao arriba.",
     signup: "Regístrate gratis",
     demo: "Solicita una demo",
   },

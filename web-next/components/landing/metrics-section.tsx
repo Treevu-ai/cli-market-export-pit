@@ -3,7 +3,12 @@
 import { useEffect, useState, useRef } from "react";
 import { useLocale } from "@/lib/i18n/locale-context";
 
-const METRIC_VALUES = [13, 17, 48];
+// Illustrative example figures for the "high-flavanol cacao → EU" case,
+// confirmed live 2026-07-30 against the fixed pipeline: 38 real science
+// evidence records (OpenAlex/Crossref/PubMed/SemanticScholar), 11 PE
+// retail stores compared, 136 real shelf products found (CLIMarket, PE).
+// Static, not fetched live -- update manually if the case changes again.
+const METRIC_VALUES = [38, 11, 136];
 
 function AnimatedNumber({ end, suffix = "", prefix = "" }: { end: number; suffix?: string; prefix?: string }) {
   const [count, setCount] = useState(0);

@@ -107,12 +107,12 @@ export const en = {
   },
   metrics: {
     tag: "REAL CASE",
-    tagDetail: "organic blueberry → US",
+    tagDetail: "high-flavanol cacao → EU",
     headline: "From hypothesis",
     headlineAccent: "to evidence.",
     items: [
-      { label: "Scientific findings", sublabel: "organic blueberry → US case" },
-      { label: "Commercial references", sublabel: "same case" },
+      { label: "Scientific findings", sublabel: "high-flavanol cacao → EU case" },
+      { label: "Stores compared", sublabel: "same case" },
       { label: "Shelf products compared", sublabel: "PE market, CLI Market" },
     ],
     tickerExtra: "+11 more sources",
@@ -213,7 +213,7 @@ export const en = {
   cta: {
     headline: "Build the evidence",
     headlineLine2: "first.",
-    lead: "Launch a complete analysis in minutes and decide with data — the same engine that already ran the blueberry case above.",
+    lead: "Launch a complete analysis in minutes and decide with data — the same engine that already ran the cacao case above.",
     signup: "Sign up for free",
     demo: "Get a demo",
   },
