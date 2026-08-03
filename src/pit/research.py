@@ -18,6 +18,7 @@ from .efsa_eurlex import EFSALexConnector, EFSALexRequestError
 from .epo_ops import EPOOPSConnector, EPOOPSRequestError
 from .fooddata_central import FoodDataCentralConnector, FoodDataCentralRequestError
 from .gdelt import GDELTConnector, GDELTRequestError
+from .lex_api import LexAPIConnector, LexAPIRequestError
 from .nih_reporter import NIHReporterConnector, NIHReporterRequestError
 from .nsf_awards import NSFAwardsConnector, NSFAwardsRequestError
 from .openalex import OpenAlexRequestError, OpenAlexResponse
@@ -102,6 +103,7 @@ class ResearchService:
         openfda_connector: OpenFDAConnector | None = None,
         efsa_connector: EFSALexConnector | None = None,
         fooddata_connector: FoodDataCentralConnector | None = None,
+        lex_api_connector: LexAPIConnector | None = None,
         climatiq_connector: ClimatiqConnector | None = None,
         commerce_connector: CLIMarketConnector | None = None,
         bcrp_connector: BCRPConnector | None = None,
@@ -122,6 +124,7 @@ class ResearchService:
         self.openfda_connector = openfda_connector
         self.efsa_connector = efsa_connector
         self.fooddata_connector = fooddata_connector
+        self.lex_api_connector = lex_api_connector
         self.climatiq_connector = climatiq_connector
         self.commerce_connector = commerce_connector
         self.bcrp_connector = bcrp_connector
@@ -1255,6 +1258,7 @@ class ResearchService:
             ("openfda", self.openfda_connector, OpenFDARequestError),
             ("efsa_eurlex", self.efsa_connector, EFSALexRequestError),
             ("fooddata_central", self.fooddata_connector, FoodDataCentralRequestError),
+            ("lex_api", self.lex_api_connector, LexAPIRequestError),
         ]
         failures: list[str] = []
         for source, connector, error_cls in connectors:
@@ -1282,7 +1286,7 @@ class ResearchService:
                 )
                 for work in response.works:
                     self._store_regulatory_work(run_id=run_id, request_id=request_id, work=work, source=connector.source)
-            except (OpenFDARequestError, EFSALexRequestError, FoodDataCentralRequestError) as error:
+            except (OpenFDARequestError, EFSALexRequestError, FoodDataCentralRequestError, LexAPIRequestError) as error:
                 if request_id is None:
                     request_params = error.request_params or {"query": run["query_normalized"]}
                     request_url = error.request_url or connector.base_url

@@ -40,6 +40,7 @@ from .efsa_eurlex import EFSALexConnector
 from .epo_ops import EPOOPSConnector
 from .fooddata_central import FoodDataCentralConnector
 from .gdelt import GDELTConnector
+from .lex_api import LexAPIConnector
 from .nih_reporter import NIHReporterConnector
 from .nsf_awards import NSFAwardsConnector
 from .openalex import OpenAlexConnector
@@ -161,6 +162,7 @@ def _default_services() -> tuple[ResearchService, ScoringService, ReportGenerato
         OpenFDAConnector(),
         EFSALexConnector(),
         FoodDataCentralConnector(api_key=os.getenv("FOODDATA_CENTRAL_API_KEY")),
+        LexAPIConnector(api_key=os.getenv("LEX_API_TOKEN")),
         ClimatiqConnector(api_key=os.getenv("CLIMATIQ_API_KEY")),
         CLIMarketConnector(),
         BCRPConnector(),
