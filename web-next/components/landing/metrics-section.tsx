@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import {
+  BookOpen, Link2, Stethoscope, GraduationCap, Shield, Newspaper, Ship,
+  BarChart3, Wheat, ShoppingCart, ShieldCheck, Scale, Gavel, Apple, Leaf,
+  FlaskConical, Microscope, Award, Landmark,
+} from "lucide-react";
 import { useLocale } from "@/lib/i18n/locale-context";
 
 // Illustrative example figures for the "high-flavanol cacao → EU" case,
@@ -9,6 +14,36 @@ import { useLocale } from "@/lib/i18n/locale-context";
 // retail stores compared, 136 real shelf products found (CLIMarket, PE).
 // Static, not fetched live -- update manually if the case changes again.
 const METRIC_VALUES = [38, 11, 136];
+
+// All 19 live connectors as of 2026-08-03 (18 + LexAPI, added that day for
+// regulatory search). Keep in sync with pitchavi/src/pit/api.py's
+// _default_services() wiring -- update this list, infrastructure-section's
+// NODE_COUNTS/"18" copy, and the lead text together when a connector is
+// added or removed. Proper nouns, not translated across locales.
+// Generic per-source icons (lucide-react) rather than real brand logos --
+// no bundled assets for 19 external services, and several (WITS, USDA FAS,
+// BCRP...) don't have a clean square mark to begin with.
+const DATA_SOURCES = [
+  { name: "OpenAlex", Icon: BookOpen },
+  { name: "Crossref", Icon: Link2 },
+  { name: "PubMed", Icon: Stethoscope },
+  { name: "Semantic Scholar", Icon: GraduationCap },
+  { name: "EPO OPS", Icon: Shield },
+  { name: "GDELT", Icon: Newspaper },
+  { name: "UN Comtrade", Icon: Ship },
+  { name: "WITS", Icon: BarChart3 },
+  { name: "USDA FAS", Icon: Wheat },
+  { name: "CLI Market", Icon: ShoppingCart },
+  { name: "OpenFDA", Icon: ShieldCheck },
+  { name: "EUR-Lex", Icon: Scale },
+  { name: "LexAPI", Icon: Gavel },
+  { name: "FoodData Central", Icon: Apple },
+  { name: "Climatiq", Icon: Leaf },
+  { name: "CORDIS", Icon: FlaskConical },
+  { name: "NIH RePORTER", Icon: Microscope },
+  { name: "NSF Awards", Icon: Award },
+  { name: "BCRP", Icon: Landmark },
+];
 
 function AnimatedNumber({ end, suffix = "", prefix = "" }: { end: number; suffix?: string; prefix?: string }) {
   const [count, setCount] = useState(0);
@@ -201,7 +236,7 @@ function DotGraph({
 }
 
 export function MetricsSection() {
-  const { t, tList } = useLocale();
+  const { t } = useLocale();
   const metrics = METRIC_VALUES.map((value, i) => ({
     value,
     suffix: "",
@@ -210,9 +245,7 @@ export function MetricsSection() {
     sublabel: t(`metrics.items.${i}.sublabel`),
   }));
   const [isVisible, setIsVisible] = useState(false);
-  const [showMoreSources, setShowMoreSources] = useState(false);
   const sectionRef = useRef<HTMLElement>(null);
-  const moreSources = tList("metrics.tickerMore");
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -255,18 +288,20 @@ export function MetricsSection() {
 
         {/* Metrics grid */}
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Large metric */}
-          <div className={`lg:col-span-1 bg-foreground/[0.02] border border-foreground/10 p-10 lg:p-14 transition-all duration-700 ${
+          {/* Large metric — same top-to-bottom structure as the other two
+              cards (sublabel, label, graph, THEN the number) so all three
+              read consistently; this one used to show the number first. */}
+          <div className={`lg:col-span-1 bg-foreground/[0.02] border border-foreground/10 p-8 flex flex-col items-start justify-between gap-6 transition-all duration-700 ${
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-12"
           }`}>
-            <div className="text-4xl md:text-5xl lg:text-6xl font-display tracking-tight mb-4 whitespace-nowrap overflow-hidden">
-              <AnimatedNumber end={metrics[0].value} suffix={metrics[0].suffix} prefix={metrics[0].prefix} />
-            </div>
-            <div className="mb-6">
+            <div className="w-full">
+              <div className="text-sm text-muted-foreground font-mono mb-2">{metrics[0].sublabel}</div>
+              <div className="text-lg text-foreground mb-3">{metrics[0].label}</div>
               <DotGraph color="white" height={36} freq1={0.28} freq2={0.09} freqT={0.5} speed={0.018} baseline={0.35} amplitude={0.55} />
             </div>
-            <div className="text-lg text-foreground mb-2">{metrics[0].label}</div>
-            <div className="text-sm text-muted-foreground font-mono">{metrics[0].sublabel}</div>
+            <div className="text-4xl md:text-5xl lg:text-6xl font-display tracking-tight w-full whitespace-nowrap overflow-hidden">
+              <AnimatedNumber end={metrics[0].value} suffix={metrics[0].suffix} prefix={metrics[0].prefix} />
+            </div>
           </div>
 
           {/* Metrics */}
@@ -299,32 +334,33 @@ export function MetricsSection() {
           ))}
         </div>
 
-        {/* Bottom ticker */}
+        {/* Bottom ticker — live sources marquee */}
         <div className={`mt-16 pt-8 border-t border-foreground/10 transition-all duration-1000 delay-500 ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}>
-          <div className="flex flex-wrap items-center gap-x-12 gap-y-4 text-sm font-mono text-muted-foreground">
-            <span>OpenAlex</span>
-            <span>Crossref</span>
-            <span>EPO OPS</span>
-            <span>CLI Market</span>
-            <span>OpenFDA</span>
-            <button
-              type="button"
-              onClick={() => setShowMoreSources((prev) => !prev)}
-              aria-expanded={showMoreSources}
-              className="text-foreground underline underline-offset-2 decoration-foreground/30 hover:decoration-foreground transition-colors"
-            >
-              {t("metrics.tickerExtra")}
-            </button>
+          <div className="flex items-center gap-2 mb-6 text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            <span className="w-2 h-2 rounded-full bg-[#64ffda] animate-pulse" />
+            {t("metrics.sourcesLabel")}
           </div>
-          {showMoreSources && (
-            <div className="mt-4 flex flex-wrap items-center gap-x-12 gap-y-4 text-sm font-mono text-muted-foreground">
-              {moreSources.map((source) => (
-                <span key={source}>{source}</span>
+
+          <div className="sources-marquee-wrap relative overflow-hidden">
+            {/* Edge fades so the loop seam isn't visible */}
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-16 lg:w-32 bg-gradient-to-r from-background to-transparent z-10" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-16 lg:w-32 bg-gradient-to-l from-background to-transparent z-10" />
+
+            <div className="marquee flex w-max">
+              {[...DATA_SOURCES, ...DATA_SOURCES].map((source, i) => (
+                <span
+                  key={`${source.name}-${i}`}
+                  className="flex items-center gap-2 shrink-0 pr-8 text-sm font-mono text-muted-foreground"
+                >
+                  <source.Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  {source.name}
+                  <span className="w-1 h-1 rounded-full bg-foreground/20 ml-6" aria-hidden="true" />
+                </span>
               ))}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </section>

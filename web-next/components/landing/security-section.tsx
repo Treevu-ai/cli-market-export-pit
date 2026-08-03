@@ -79,8 +79,8 @@ export function SecuritySection() {
             <div className="relative z-10">
               <span className="font-mono text-sm text-muted-foreground">{t("security.phaseLabel")}</span>
               <div className="mt-8">
-                <span className="text-7xl lg:text-8xl font-display">0</span>
-                <span className="block text-muted-foreground mt-2">{t("security.zeroLabel")}</span>
+                <span className="text-7xl lg:text-8xl font-display">100<span className="text-4xl lg:text-5xl text-muted-foreground">%</span></span>
+                <span className="block text-muted-foreground mt-2">{t("security.transparencyLabel")}</span>
               </div>
             </div>
 

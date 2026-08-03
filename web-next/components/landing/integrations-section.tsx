@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Grape, FlaskConical, Wheat, Leaf, Citrus, Sprout, Coffee, Wine, Pill, Cherry, Nut, Flower2, Flame, CircleDot, Sparkles, TreeDeciduous } from "lucide-react";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useLocale } from "@/lib/i18n/locale-context";
 
 type Family =
@@ -60,6 +60,15 @@ const FAMILY_ORDER: Family[] = [
   "bebidasEstimulantes",
 ];
 
+const FAMILY_ICONS: Record<Family, typeof Grape> = {
+  frutasFrescas: Citrus,
+  derivadosFuncionales: FlaskConical,
+  especiasAromaticas: Flame,
+  granosSemillas: Wheat,
+  vegetalesRaices: Sprout,
+  bebidasEstimulantes: Coffee,
+};
+
 function HsQualityBadge({ exclusive, t }: { exclusive: boolean; t: (key: string) => string }) {
   return (
     <span
@@ -77,6 +86,7 @@ export function IntegrationsSection() {
   const [isVisible, setIsVisible] = useState(false);
   const [hoveredName, setHoveredName] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [openFamily, setOpenFamily] = useState<Family | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -126,98 +136,131 @@ export function IntegrationsSection() {
 
       {/* Integration families */}
       <div className="relative z-10 mt-16 lg:mt-24 max-w-[1400px] mx-auto px-6 lg:px-12">
-        <Accordion
-          type="multiple"
-          defaultValue={["frutasFrescas"]}
-          className={`mb-16 transition-all duration-1000 ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
+        <div
+          className={`mb-16 grid grid-cols-2 lg:grid-cols-3 gap-4 transition-all duration-1000 ${isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
         >
-          {familyGroups.map(({ family, items }) => (
-            <AccordionItem key={family} value={family} className="border-foreground/10">
-              <AccordionTrigger className="py-6 hover:no-underline">
-                <span className="flex flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-left">
-                  <span className="font-display text-2xl lg:text-3xl tracking-tight">
+          {familyGroups.map(({ family, items }) => {
+            const Icon = FAMILY_ICONS[family];
+            return (
+              <button
+                key={family}
+                type="button"
+                onClick={() => setOpenFamily(family)}
+                className="group relative overflow-hidden p-6 lg:p-8 border border-foreground/10 hover:border-foreground/30 hover:bg-foreground/[0.04] transition-all duration-300 text-left"
+              >
+                <div className="w-10 h-10 mb-6 flex items-center justify-center text-foreground/60 group-hover:text-white transition-colors">
+                  <Icon className="w-6 h-6" />
+                </div>
+                <div className="flex items-baseline gap-3 mb-2">
+                  <span className="font-display text-xl lg:text-2xl tracking-tight">
                     {t(`integrations.families.${family}.name`)}
                   </span>
                   <span className="text-xs font-mono px-2 py-0.5 bg-foreground/10 text-muted-foreground rounded-sm">
                     {items.length}
                   </span>
-                  <span className="text-sm text-muted-foreground font-normal">
-                    {t(`integrations.families.${family}.description`)}
-                  </span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-                  {items.map((integration) => (
-                    <a
-                      key={integration.name}
-                      href={`/analyze/?query=${encodeURIComponent(integration.query)}&market=${integration.market}`}
-                      className={`group relative overflow-hidden p-6 lg:p-7 border transition-all duration-500 block ${
-                        hoveredName === integration.name
-                          ? "border-foreground bg-foreground/[0.04] scale-[1.02]"
-                          : "border-foreground/10 hover:border-foreground/30"
-                      }`}
-                      onMouseEnter={(e) => {
-                        setHoveredName(integration.name);
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-                      }}
-                      onMouseMove={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-                      }}
-                      onMouseLeave={() => {
-                        setHoveredName(null);
-                        setMousePos(null);
-                      }}
-                    >
-                      {/* Cursor-following halo */}
-                      {hoveredName === integration.name && mousePos && (
-                        <span
-                          aria-hidden="true"
-                          className="pointer-events-none absolute inset-0 z-0"
-                          style={{
-                            background: `radial-gradient(200px circle at ${mousePos.x}px ${mousePos.y}px, rgba(255,255,255,0.1) 0%, transparent 70%)`,
-                          }}
-                        />
-                      )}
-
-                      {/* HS evidence-quality badge */}
-                      {integration.exclusive !== null && (
-                        <HsQualityBadge exclusive={integration.exclusive} t={t} />
-                      )}
-
-                      {/* Category tag */}
-                      <span className={`absolute top-3 right-3 text-[10px] font-mono px-2 py-0.5 transition-colors ${
-                        hoveredName === integration.name
-                          ? "bg-foreground text-background"
-                          : "bg-foreground/10 text-muted-foreground"
-                      }`}>
-                        {integration.category}
-                      </span>
-
-                      {/* Icon */}
-                      <div className={`w-10 h-10 mb-6 mt-4 flex items-center justify-center transition-colors ${
-                        hoveredName === integration.name ? "text-white" : "text-foreground/60"
-                      }`}>
-                        <integration.Icon className="w-6 h-6" />
-                      </div>
-
-                      <span className="font-medium block">{t(`integrations.names.${integration.name}`)}</span>
-
-                      {/* Animated underline */}
-                      <div className="absolute bottom-0 left-0 right-0 h-px bg-foreground/20 overflow-hidden">
-                        <div className={`h-full bg-foreground transition-all duration-500 ${
-                          hoveredName === integration.name ? "w-full" : "w-0"
-                        }`} />
-                      </div>
-                    </a>
-                  ))}
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
+                <p className="text-sm text-muted-foreground">
+                  {t(`integrations.families.${family}.description`)}
+                </p>
+
+                {/* Animated underline */}
+                <div className="absolute bottom-0 left-0 right-0 h-px bg-foreground/20 overflow-hidden">
+                  <div className="h-full bg-foreground w-0 group-hover:w-full transition-all duration-500" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <Dialog open={openFamily !== null} onOpenChange={(open) => !open && setOpenFamily(null)}>
+          {/* "dark" forced here because Radix's Portal mounts to document.body,
+              outside the <main className="dark"> wrapper the rest of the site
+              relies on for its color variables -- without it this modal
+              rendered with the light theme's white background. */}
+          <DialogContent className="dark sm:max-w-3xl bg-background text-foreground border-foreground/10 max-h-[85vh] overflow-y-auto">
+            {openFamily && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-display text-2xl tracking-tight">
+                    {t(`integrations.families.${openFamily}.name`)}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {t(`integrations.families.${openFamily}.description`)}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  {familyGroups
+                    .find((group) => group.family === openFamily)
+                    ?.items.map((integration) => (
+                      <a
+                        key={integration.name}
+                        href={`/analyze/?query=${encodeURIComponent(integration.query)}&market=${integration.market}`}
+                        className={`group relative overflow-hidden p-6 border transition-all duration-500 block ${
+                          hoveredName === integration.name
+                            ? "border-foreground bg-foreground/[0.04] scale-[1.02]"
+                            : "border-foreground/10 hover:border-foreground/30"
+                        }`}
+                        onMouseEnter={(e) => {
+                          setHoveredName(integration.name);
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                        }}
+                        onMouseMove={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredName(null);
+                          setMousePos(null);
+                        }}
+                      >
+                        {/* Cursor-following halo */}
+                        {hoveredName === integration.name && mousePos && (
+                          <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-0 z-0"
+                            style={{
+                              background: `radial-gradient(200px circle at ${mousePos.x}px ${mousePos.y}px, rgba(255,255,255,0.1) 0%, transparent 70%)`,
+                            }}
+                          />
+                        )}
+
+                        {/* HS evidence-quality badge */}
+                        {integration.exclusive !== null && (
+                          <HsQualityBadge exclusive={integration.exclusive} t={t} />
+                        )}
+
+                        {/* Category tag */}
+                        <span className={`absolute top-3 right-3 text-[10px] font-mono px-2 py-0.5 transition-colors ${
+                          hoveredName === integration.name
+                            ? "bg-foreground text-background"
+                            : "bg-foreground/10 text-muted-foreground"
+                        }`}>
+                          {integration.category}
+                        </span>
+
+                        {/* Icon */}
+                        <div className={`w-10 h-10 mb-6 mt-4 flex items-center justify-center transition-colors ${
+                          hoveredName === integration.name ? "text-white" : "text-foreground/60"
+                        }`}>
+                          <integration.Icon className="w-6 h-6" />
+                        </div>
+
+                        <span className="font-medium block">{t(`integrations.names.${integration.name}`)}</span>
+
+                        {/* Animated underline */}
+                        <div className="absolute bottom-0 left-0 right-0 h-px bg-foreground/20 overflow-hidden">
+                          <div className={`h-full bg-foreground transition-all duration-500 ${
+                            hoveredName === integration.name ? "w-full" : "w-0"
+                          }`} />
+                        </div>
+                      </a>
+                    ))}
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* Bottom row */}
         <div className={`flex flex-wrap items-center justify-between gap-8 pt-12 border-t border-foreground/10 transition-all duration-1000 delay-500 pb-32 lg:pb-40 ${

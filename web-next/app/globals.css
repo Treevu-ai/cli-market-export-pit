@@ -147,9 +147,15 @@
   .marquee {
     animation: marquee 30s linear infinite;
   }
-  
+
   .marquee-reverse {
     animation: marquee-reverse 25s linear infinite;
+  }
+
+  /* Pause on hover via plain CSS -- Tailwind's group-hover:[animation-play-state:paused]
+     arbitrary property didn't take effect reliably, confirmed live. */
+  .sources-marquee-wrap:hover .marquee {
+    animation-play-state: paused;
   }
 
   @keyframes marquee {
