@@ -223,7 +223,25 @@ class TaxonomyTests(unittest.TestCase):
                 taxonomy_version="cacao-functional-v1",
                 query_normalized="aguaymanto organico",
             )
-            self.assertIn("goldenberry", expanded)
+            self.assertEqual(expanded, "goldenberry organico")
+
+    def test_expand_query_with_synonyms_replaces_instead_of_appending(self) -> None:
+        """Regression: appending the synonym alongside the original term
+        (e.g. "aguaymanto organico" -> "aguaymanto organico goldenberry")
+        made AND-semantics search engines (EPO, CORDIS, ...) require both
+        the Spanish and English term simultaneously -- an near-impossible
+        match. Confirmed live: this dropped the science score from 100 to
+        30 and left patent/commerce/sustainability/techscout at 0. The
+        original term must not survive in the expanded query."""
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            expanded = expand_query_with_synonyms(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="aguaymanto organico",
+            )
+            self.assertNotIn("aguaymanto", expanded)
 
     def test_ensure_default_taxonomy_backfills_synonyms_added_after_first_seed(self) -> None:
         """Regression: ensure_default_taxonomy skipped seeding entirely once

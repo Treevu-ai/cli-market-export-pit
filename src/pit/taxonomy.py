@@ -222,22 +222,32 @@ def expand_query_with_synonyms(store: ResearchStore, *, taxonomy_version: str, q
         taxonomy = store.get_taxonomy(name, version)
     if taxonomy is None:
         return query_normalized
-    # Regression: this used to append synonym["term"] -- the very term that
-    # just matched, e.g. matching "aguaymanto" appended "aguaymanto" again,
-    # a no-op. Append synonym["normalized"] instead (the canonical/group
-    # form, e.g. "goldenberry" for aguaymanto/physalis/cape gooseberry) --
-    # the international name other databases (EPO, CORDIS, NIH, NSF,
-    # Climatiq, CLI Market US) actually index under. Confirmed live:
-    # "aguaymanto organico" expanded to "aguaymanto organico aguaymanto"
-    # (useless) instead of "...goldenberry" (which finds real results).
-    extras: list[str] = []
-    seen: set[str] = set()
+    # Regression (two rounds, both confirmed live):
+    # 1. This used to append synonym["term"] -- the very term that just
+    #    matched, e.g. matching "aguaymanto" appended "aguaymanto" again, a
+    #    no-op.
+    # 2. Appending synonym["normalized"] alongside the original term (e.g.
+    #    "aguaymanto organico" -> "aguaymanto organico goldenberry") made
+    #    things *worse*: EPO/CORDIS/etc. do literal AND-of-all-words search,
+    #    so requiring "aguaymanto" AND "goldenberry" simultaneously is a
+    #    stricter, near-impossible match -- no document contains both a
+    #    Spanish common name and its English synonym. Confirmed live: this
+    #    dropped the science score from 100 to 30 and left patents/commerce/
+    #    sustainability/techscout at 0, same as before the "fix".
+    # REPLACE the untranslated term with its canonical/international form
+    # instead of appending -- "aguaymanto organico" -> "goldenberry organico"
+    # -- so AND-semantics search engines see the term they'd actually index
+    # under, without also demanding the original word be present too.
+    expanded = query_normalized
+    replaced_normalized: set[str] = set()
     for synonym in store.get_synonyms(taxonomy["id"]):
-        matched = synonym["normalized"] in query_normalized or synonym["term"] in query_normalized
-        already_present = synonym["normalized"] in query_normalized
-        if matched and not already_present and synonym["normalized"] not in seen:
-            extras.append(synonym["normalized"])
-            seen.add(synonym["normalized"])
-    if not extras:
+        term = synonym["term"]
+        normalized = synonym["normalized"]
+        if normalized in replaced_normalized or normalized in expanded:
+            continue
+        if term in expanded:
+            expanded = expanded.replace(term, normalized)
+            replaced_normalized.add(normalized)
+    if expanded == query_normalized:
         return query_normalized
-    return _normalize(f"{query_normalized} {' '.join(extras)}")
+    return _normalize(expanded)
