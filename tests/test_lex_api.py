@@ -91,7 +91,14 @@ class LexAPIConnectorTests(unittest.TestCase):
         first_body = json.loads(mocked_urlopen.call_args_list[0][0][0].data)
         second_body = json.loads(mocked_urlopen.call_args_list[1][0][0].data)
         self.assertEqual(first_body["query"], "mango")
+        self.assertEqual(first_body["dateFrom"], "2021-01-01")
         self.assertEqual(second_body["query"], "plant health")
+        self.assertNotIn(
+            "dateFrom", second_body,
+            "fallback must search all-time -- a framework regulation like the "
+            "2016 plant health one predates most research windows and a date "
+            "filter would silently zero it out again",
+        )
         self.assertEqual(len(result.works), 1)
         self.assertTrue(result.works[0]["is_generic_fallback"])
         self.assertIn("Marco general", result.works[0]["title"])

@@ -73,8 +73,15 @@ class LexAPIConnector:
         is_fallback = False
         if not results and query.strip().casefold() != self._FALLBACK_QUERY:
             is_fallback = True
+            # No dateFrom here, deliberately: the fallback searches for the
+            # standing regulatory framework (e.g. Reg. (EU) 2016/2031 on
+            # plant health), which predates most research runs' publication
+            # window -- confirmed live, "plant health" + dateFrom=2021-01-01
+            # returns 0 results while the same query with no date filter
+            # returns 7000+. A framework regulation being in force matters
+            # regardless of when it was adopted.
             http_status, raw_content, results, request_url, params = self._search_once(
-                query_text=self._FALLBACK_QUERY, from_publication_date=from_publication_date
+                query_text=self._FALLBACK_QUERY, from_publication_date=None
             )
 
         works: list[dict[str, Any]] = []
@@ -101,15 +108,16 @@ class LexAPIConnector:
         )
 
     def _search_once(
-        self, *, query_text: str, from_publication_date: str
+        self, *, query_text: str, from_publication_date: str | None
     ) -> tuple[int, bytes, list[dict[str, Any]], str, dict[str, Any]]:
         request_url = f"{self.base_url}/search"
         params: dict[str, Any] = {
             "query": query_text,
-            "dateFrom": from_publication_date,
             "domain": "EU_LAW",
             "maxPages": 1,
         }
+        if from_publication_date:
+            params["dateFrom"] = from_publication_date
         request = Request(
             request_url,
             data=json.dumps(params).encode("utf-8"),
