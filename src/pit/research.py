@@ -53,9 +53,25 @@ def normalize_query(query: str) -> str:
     return " ".join(query.casefold().split())
 
 
-def _run_context(run: dict[str, Any]) -> tuple[str, str, str]:
+def _run_context(run: dict[str, Any], store: ResearchStore) -> tuple[str, str, str]:
+    """Query, from_date, target_market for a domain enrichment call.
+
+    Regression: every non-science domain (patent/trade/regulatory/
+    sustainability/commerce/techscout/trend) searched with the bare
+    query_normalized -- confirmed live, "aguaymanto organico" (no synonym)
+    returned zero patents/commerce/sustainability/techscout results even
+    though the taxonomy has a "goldenberry" synonym for aguaymanto. Only
+    run_science_research applied expand_query_with_synonyms. Apply the same
+    expansion here so every domain benefits, not just science.
+    """
+    query_normalized = run["query_normalized"]
+    expanded_query = expand_query_with_synonyms(
+        store,
+        taxonomy_version=run["taxonomy_version"],
+        query_normalized=query_normalized,
+    )
     return (
-        run["query_normalized"],
+        expanded_query,
         run.get("from_publication_date") or "2021-01-01",
         run.get("target_market") or "US",
     )
@@ -348,7 +364,7 @@ class ResearchService:
         if self.pubmed_connector is None:
             raise RuntimeError("PubMed connector is not configured")
         run = self.store.get_run(run_id)
-        query, from_date, _target_market = _run_context(run)
+        query, from_date, _target_market = _run_context(run, self.store)
         request_id: str | None = None
         try:
             response = self.pubmed_connector.search(
@@ -392,7 +408,7 @@ class ResearchService:
         if self.semanticscholar_connector is None:
             raise RuntimeError("Semantic Scholar connector is not configured")
         run = self.store.get_run(run_id)
-        query, from_date, _target_market = _run_context(run)
+        query, from_date, _target_market = _run_context(run, self.store)
         request_id: str | None = None
         try:
             response = self.semanticscholar_connector.search(
@@ -436,7 +452,7 @@ class ResearchService:
         if self.patent_connector is None:
             raise RuntimeError("Patent connector is not configured")
         run = self.store.get_run(run_id)
-        query, from_date, _target_market = _run_context(run)
+        query, from_date, _target_market = _run_context(run, self.store)
         request_id: str | None = None
         try:
             response = self.patent_connector.search(
@@ -628,7 +644,7 @@ class ResearchService:
         if self.trend_connector is None:
             raise RuntimeError("Trend connector is not configured")
         run = self.store.get_run(run_id)
-        query, from_date, target_market = _run_context(run)
+        query, from_date, target_market = _run_context(run, self.store)
         request_id: str | None = None
         try:
             response = self.trend_connector.search(
@@ -676,7 +692,7 @@ class ResearchService:
         if self.trade_connector is None:
             raise RuntimeError("Trade connector is not configured")
         run = self.store.get_run(run_id)
-        query, from_date, target_market = _run_context(run)
+        query, from_date, target_market = _run_context(run, self.store)
         resolved_hs = hs_code or resolve_hs_code(
             self.store,
             taxonomy_version=run["taxonomy_version"],
@@ -982,7 +998,7 @@ class ResearchService:
         if self.commerce_connector is None:
             raise RuntimeError("CLI Market connector is not configured")
         run = self.store.get_run(run_id)
-        query, from_date, target_market = _run_context(run)
+        query, from_date, target_market = _run_context(run, self.store)
         request_id: str | None = None
         try:
             response = self.commerce_connector.search(
@@ -1253,7 +1269,7 @@ class ResearchService:
 
     def enrich_with_regulatory(self, *, run_id: str, limit: int) -> dict[str, Any]:
         run = self.store.get_run(run_id)
-        query, from_date, target_market = _run_context(run)
+        query, from_date, target_market = _run_context(run, self.store)
         connectors = [
             ("openfda", self.openfda_connector, OpenFDARequestError),
             ("efsa_eurlex", self.efsa_connector, EFSALexRequestError),
@@ -1352,7 +1368,7 @@ class ResearchService:
         if self.climatiq_connector is None:
             raise RuntimeError("Climatiq connector is not configured")
         run = self.store.get_run(run_id)
-        query, from_date, _target_market = _run_context(run)
+        query, from_date, _target_market = _run_context(run, self.store)
         request_id: str | None = None
         try:
             response = self.climatiq_connector.search(
@@ -1451,7 +1467,7 @@ class ResearchService:
 
     def enrich_with_techscout(self, *, run_id: str, limit: int) -> dict[str, Any]:
         run = self.store.get_run(run_id)
-        query, from_date, _target_market = _run_context(run)
+        query, from_date, _target_market = _run_context(run, self.store)
         connectors = [
             ("cordis", self.cordis_connector, CORDISRequestError),
             ("nih_reporter", self.nih_connector, NIHReporterRequestError),
