@@ -113,7 +113,13 @@ class LexAPIConnector:
         request_url = f"{self.base_url}/search"
         params: dict[str, Any] = {
             "query": query_text,
-            "domain": "EU_LAW",
+            # No "domain" param, deliberately: "domain": "EU_LAW" (a documented
+            # valid value) reliably returns 0 results on the live API --
+            # confirmed by A/B testing the identical query with and without
+            # it ("plant health": 0 with domain=EU_LAW, 7180 with domain=ALL
+            # or omitted). Omitting matches the working "ALL"/default behavior
+            # without depending on which value LexAPI's domain filter is
+            # actually broken for.
             "maxPages": 1,
         }
         if from_publication_date:
