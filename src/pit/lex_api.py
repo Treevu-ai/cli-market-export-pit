@@ -42,6 +42,17 @@ class LexAPIConnector:
     license_name = "LexAPI (lex-api.com) — EUR-Lex data; commercial wrapper, attribution required"
     base_url = "https://lex-api.com/api/v1"
 
+    # EUR-Lex's own search is a literal keyword match, not semantic -- confirmed
+    # live: bare fruit names ("mango", "camu camu") and even name+topic
+    # combinations ("mango plant health", "mango maximum residue") all return
+    # zero results, while broad EU food-law terms alone return thousands.
+    # There is no product-specific fallback that reliably matches; the only
+    # working fallback is the general regulatory framework a fresh-produce
+    # import would fall under, searched WITHOUT the product name mixed in.
+    # "Plant health" (the EU's phytosanitary import framework, Reg. (EU)
+    # 2016/2031) is the most on-topic single term for agricultural imports.
+    _FALLBACK_QUERY = "plant health"
+
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key or os.getenv("LEX_API_TOKEN")
 
@@ -55,9 +66,46 @@ class LexAPIConnector:
     ) -> LexAPIResponse:
         if not self.api_key:
             raise RuntimeError("LexAPI connector is not configured")
+
+        http_status, raw_content, results, request_url, params = self._search_once(
+            query_text=query, from_publication_date=from_publication_date
+        )
+        is_fallback = False
+        if not results and query.strip().casefold() != self._FALLBACK_QUERY:
+            is_fallback = True
+            http_status, raw_content, results, request_url, params = self._search_once(
+                query_text=self._FALLBACK_QUERY, from_publication_date=from_publication_date
+            )
+
+        works: list[dict[str, Any]] = []
+        for item in results[:limit]:
+            title = item.get("title")
+            if is_fallback and title:
+                title = f"[Marco general — no específico de '{query}'] {title}"
+            works.append({
+                "celex_number": item.get("celexNumber"),
+                "title": title,
+                "date": item.get("dateOfDocument"),
+                "type": item.get("documentType"),
+                "url": item.get("url"),
+                "source": "lex_api",
+                "is_generic_fallback": is_fallback,
+            })
+
+        return LexAPIResponse(
+            request_url=request_url,
+            request_params={**params, "fallback_applied": is_fallback},
+            http_status=http_status,
+            raw_content=raw_content,
+            works=works,
+        )
+
+    def _search_once(
+        self, *, query_text: str, from_publication_date: str
+    ) -> tuple[int, bytes, list[dict[str, Any]], str, dict[str, Any]]:
         request_url = f"{self.base_url}/search"
         params: dict[str, Any] = {
-            "query": query,
+            "query": query_text,
             "dateFrom": from_publication_date,
             "domain": "EU_LAW",
             "maxPages": 1,
@@ -113,21 +161,4 @@ class LexAPIConnector:
                 request_params=params,
             ) from error
 
-        works: list[dict[str, Any]] = []
-        for item in results[:limit]:
-            works.append({
-                "celex_number": item.get("celexNumber"),
-                "title": item.get("title"),
-                "date": item.get("dateOfDocument"),
-                "type": item.get("documentType"),
-                "url": item.get("url"),
-                "source": "lex_api",
-            })
-
-        return LexAPIResponse(
-            request_url=request_url,
-            request_params=params,
-            http_status=http_status,
-            raw_content=raw_content,
-            works=works,
-        )
+        return http_status, raw_content, results, request_url, params

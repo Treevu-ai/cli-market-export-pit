@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -19,6 +20,14 @@ SEARCH_BODY = (
     b'{"results":[{"celexNumber":"32016R0679","title":"Regulation (EU) 2016/679",'
     b'"documentType":"Regulation","dateOfDocument":"27/04/2016",'
     b'"url":"https://eur-lex.europa.eu/eli/reg/2016/679/oj"}]}'
+)
+
+EMPTY_BODY = b'{"results":[],"totalResults":0}'
+
+PLANT_HEALTH_BODY = (
+    b'{"results":[{"celexNumber":"32016R2031","title":"Regulation (EU) 2016/2031 on plant health",'
+    b'"documentType":"Regulation","dateOfDocument":"26/10/2016",'
+    b'"url":"https://eur-lex.europa.eu/eli/reg/2016/2031/oj"}]}'
 )
 
 
@@ -66,6 +75,37 @@ class LexAPIConnectorTests(unittest.TestCase):
         with patch("pit.lex_api.urlopen", side_effect=TimeoutError("timed out")):
             with self.assertRaises(LexAPIRequestError):
                 connector.search(query="mango", from_publication_date="2021-01-01", limit=5)
+
+    def test_search_falls_back_to_plant_health_when_literal_query_is_empty(self) -> None:
+        """Regression: EUR-Lex's literal keyword search returns zero results for
+        bare fruit names ("mango", "camu camu") and even name+topic combinations
+        ("mango plant health") -- confirmed live. The only reliable fallback is
+        a broad regulatory-framework term searched alone, without the product
+        name mixed in."""
+        connector = LexAPIConnector(api_key="lex_live_test")
+        responses = [_fake_response(EMPTY_BODY), _fake_response(PLANT_HEALTH_BODY)]
+        with patch("pit.lex_api.urlopen", side_effect=responses) as mocked_urlopen:
+            result = connector.search(query="mango", from_publication_date="2021-01-01", limit=5)
+
+        self.assertEqual(mocked_urlopen.call_count, 2)
+        first_body = json.loads(mocked_urlopen.call_args_list[0][0][0].data)
+        second_body = json.loads(mocked_urlopen.call_args_list[1][0][0].data)
+        self.assertEqual(first_body["query"], "mango")
+        self.assertEqual(second_body["query"], "plant health")
+        self.assertEqual(len(result.works), 1)
+        self.assertTrue(result.works[0]["is_generic_fallback"])
+        self.assertIn("Marco general", result.works[0]["title"])
+        self.assertIn("mango", result.works[0]["title"])
+        self.assertTrue(result.request_params["fallback_applied"])
+
+    def test_search_does_not_fall_back_when_literal_query_has_results(self) -> None:
+        connector = LexAPIConnector(api_key="lex_live_test")
+        with patch("pit.lex_api.urlopen", return_value=_fake_response(SEARCH_BODY)) as mocked_urlopen:
+            result = connector.search(query="data protection", from_publication_date="2021-01-01", limit=5)
+
+        self.assertEqual(mocked_urlopen.call_count, 1)
+        self.assertFalse(result.works[0]["is_generic_fallback"])
+        self.assertFalse(result.request_params["fallback_applied"])
 
 
 if __name__ == "__main__":
