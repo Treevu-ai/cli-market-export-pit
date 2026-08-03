@@ -5,7 +5,13 @@ import unittest
 from pathlib import Path
 
 from pit.storage import ResearchStore
-from pit.taxonomy import ensure_default_taxonomy, resolve_hs_code
+from pit.taxonomy import (
+    TAXONOMY_NAME,
+    TAXONOMY_VERSION,
+    ensure_default_taxonomy,
+    expand_query_with_synonyms,
+    resolve_hs_code,
+)
 
 
 class TaxonomyTests(unittest.TestCase):
@@ -206,6 +212,57 @@ class TaxonomyTests(unittest.TestCase):
                 query_normalized="pulpa de maracuya congelada",
             )
             self.assertEqual(hs, "200899")
+
+
+    def test_expand_query_with_synonyms_appends_goldenberry_for_aguaymanto(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            ensure_default_taxonomy(store)
+            expanded = expand_query_with_synonyms(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="aguaymanto organico",
+            )
+            self.assertIn("goldenberry", expanded)
+
+    def test_ensure_default_taxonomy_backfills_synonyms_added_after_first_seed(self) -> None:
+        """Regression: ensure_default_taxonomy skipped seeding entirely once
+        the taxonomy row already existed, so a _SEED_SYNONYMS entry added to
+        source after a taxonomy row was first created (e.g. "aguaymanto" ->
+        "goldenberry", added 2026-07-28) never reached a pre-existing
+        production DB -- confirmed live, "aguaymanto organico" returned zero
+        patents/commerce/sustainability/techscout results because the
+        synonym was only in code, never in the DB the server actually reads
+        from. Simulate a stale DB by creating the taxonomy row directly
+        (bypassing the seed loop), then confirm a second
+        ensure_default_taxonomy call backfills the missing synonym."""
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            store.create_taxonomy(name=TAXONOMY_NAME, version=TAXONOMY_VERSION)
+
+            taxonomy = store.get_taxonomy(TAXONOMY_NAME, TAXONOMY_VERSION)
+            assert taxonomy is not None
+            self.assertEqual(store.get_synonyms(taxonomy["id"]), [])
+
+            ensure_default_taxonomy(store)
+
+            expanded = expand_query_with_synonyms(
+                store,
+                taxonomy_version="cacao-functional-v1",
+                query_normalized="aguaymanto organico",
+            )
+            self.assertIn("goldenberry", expanded)
+
+    def test_ensure_default_taxonomy_does_not_duplicate_rows_on_repeat_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchStore(Path(directory) / "pit.db", Path(directory) / "raw")
+            taxonomy_id = ensure_default_taxonomy(store)
+            first_count = len(store.get_synonyms(taxonomy_id))
+
+            ensure_default_taxonomy(store)
+            ensure_default_taxonomy(store)
+
+            self.assertEqual(len(store.get_synonyms(taxonomy_id)), first_count)
 
 
 if __name__ == "__main__":

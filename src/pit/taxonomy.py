@@ -145,7 +145,9 @@ def parse_taxonomy_version(taxonomy_version: str) -> tuple[str, str]:
 def ensure_default_taxonomy(store: ResearchStore) -> str:
     existing = store.get_taxonomy(TAXONOMY_NAME, TAXONOMY_VERSION)
     if existing:
-        return existing["id"]
+        taxonomy_id = existing["id"]
+        _sync_missing_seed_data(store, taxonomy_id)
+        return taxonomy_id
     taxonomy = store.create_taxonomy(name=TAXONOMY_NAME, version=TAXONOMY_VERSION)
     taxonomy_id = taxonomy["id"]
     for term, normalized in _SEED_SYNONYMS:
@@ -158,6 +160,36 @@ def ensure_default_taxonomy(store: ResearchStore) -> str:
             description=description,
         )
     return taxonomy_id
+
+
+def _sync_missing_seed_data(store: ResearchStore, taxonomy_id: str) -> None:
+    """Backfill any _SEED_SYNONYMS/_SEED_HS_MAPPINGS entries added after this
+    taxonomy row was first created.
+
+    Regression: ensure_default_taxonomy used to skip seeding entirely once
+    the taxonomy row existed, so a seed entry added later in source (e.g.
+    "aguaymanto" -> "goldenberry", added 2026-07-28) never reached a
+    production DB whose taxonomy row predates that commit. Confirmed live:
+    querying "aguaymanto organico" returned zero patents/commerce/
+    sustainability/techscout results because the synonym was only in code,
+    never in the DB the running server reads from. This diffs by term/
+    product_term so re-running it on every request stays cheap and never
+    creates duplicate rows.
+    """
+    existing_terms = {row["term"] for row in store.get_synonyms(taxonomy_id)}
+    for term, normalized in _SEED_SYNONYMS:
+        if term not in existing_terms:
+            store.add_synonym(taxonomy_id=taxonomy_id, term=term, normalized=normalized)
+
+    existing_products = {row["product_term"] for row in store.get_hs_mappings(taxonomy_id)}
+    for product_term, hs_code, description in _SEED_HS_MAPPINGS:
+        if product_term not in existing_products:
+            store.add_hs_mapping(
+                taxonomy_id=taxonomy_id,
+                product_term=product_term,
+                hs_code=hs_code,
+                description=description,
+            )
 
 
 def resolve_hs_code(store: ResearchStore, *, taxonomy_version: str, query_normalized: str) -> str | None:
@@ -190,10 +222,22 @@ def expand_query_with_synonyms(store: ResearchStore, *, taxonomy_version: str, q
         taxonomy = store.get_taxonomy(name, version)
     if taxonomy is None:
         return query_normalized
+    # Regression: this used to append synonym["term"] -- the very term that
+    # just matched, e.g. matching "aguaymanto" appended "aguaymanto" again,
+    # a no-op. Append synonym["normalized"] instead (the canonical/group
+    # form, e.g. "goldenberry" for aguaymanto/physalis/cape gooseberry) --
+    # the international name other databases (EPO, CORDIS, NIH, NSF,
+    # Climatiq, CLI Market US) actually index under. Confirmed live:
+    # "aguaymanto organico" expanded to "aguaymanto organico aguaymanto"
+    # (useless) instead of "...goldenberry" (which finds real results).
     extras: list[str] = []
+    seen: set[str] = set()
     for synonym in store.get_synonyms(taxonomy["id"]):
-        if synonym["normalized"] in query_normalized or synonym["term"] in query_normalized:
-            extras.append(synonym["term"])
+        matched = synonym["normalized"] in query_normalized or synonym["term"] in query_normalized
+        already_present = synonym["normalized"] in query_normalized
+        if matched and not already_present and synonym["normalized"] not in seen:
+            extras.append(synonym["normalized"])
+            seen.add(synonym["normalized"])
     if not extras:
         return query_normalized
     return _normalize(f"{query_normalized} {' '.join(extras)}")
